@@ -10,8 +10,7 @@
 }
 
 .members-sidebar {
-  width: 260px;
-  /* Match main sidebar width */
+  width: 18rem;
   background: white;
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -232,27 +231,6 @@
 
 .page-header__description {
   color: var(--text-secondary);
-  margin-top: 0.25rem;
-}
-
-
-.content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-}
-
-.content-header__title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1.2;
-}
-
-.content-header__subtitle {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
   margin-top: 0.25rem;
 }
 
@@ -509,20 +487,6 @@
 
 .btn .material-symbols-outlined {
   font-size: 1.25rem;
-}
-
-.btn--danger {
-  background: var(--danger);
-  color: white;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
-}
-
-.btn--danger:hover {
-  background: #dc2626;
-}
-
-.btn--danger:active {
-  transform: scale(0.95);
 }
 
 /* Finance Page */
@@ -2914,7 +2878,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   animation: fadeIn 0.2s ease;
 }
 
@@ -3000,46 +2964,4 @@
     flex-direction: column;
     gap: 1rem;
   }
-}
-
-/* Status Badge Styles */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1;
-}
-
-.status-badge--registered {
-  background-color: #dbeafe;
-  color: #1e40af;
-}
-
-.status-badge--visitor {
-  background-color: #fef9c3;
-  color: #854d0e;
-}
-
-.status-badge--moved {
-  background-color: #f3f4f6;
-  color: #374151;
-}
-
-.status-badge--long_absent {
-  background-color: #fee2e2;
-  color: #991b1b;
-}
-
-/* Hover effect for table rows */
-.ledger-table tr.hover\:bg-gray-50:hover {
-  background-color: #f9fafb;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-.spin {
-  animation: spin 1s linear infinite;
 }

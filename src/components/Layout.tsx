@@ -1,13 +1,42 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+const SETTINGS_STORAGE_KEY = "church_erp_settings";
 
 interface LayoutProps {
   onLogout: () => void;
 }
 
+interface ChurchSettings {
+  churchName: string;
+  pastorName: string;
+}
+
 function Layout({ onLogout }: LayoutProps) {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [churchSettings, setChurchSettings] = useState<ChurchSettings>({
+    churchName: "",
+    pastorName: "",
+  });
+
+  // 저장된 교회 설정 불러오기
+  useEffect(() => {
+    const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed.church) {
+          setChurchSettings({
+            churchName: parsed.church.churchName || "",
+            pastorName: parsed.church.pastorName || "",
+          });
+        }
+      } catch {
+        // 파싱 에러 무시
+      }
+    }
+  }, []);
 
   const handleLogout = () => {
     onLogout();
@@ -22,7 +51,6 @@ function Layout({ onLogout }: LayoutProps) {
   ];
 
   const settingsItems = [
-    { path: "/settings", icon: "settings", label: "시스템 설정" },
     { path: "/help", icon: "help", label: "도움말" },
   ];
 
@@ -33,6 +61,10 @@ function Layout({ onLogout }: LayoutProps) {
     day: "numeric",
     weekday: "short",
   });
+
+  const handleUserClick = () => {
+    navigate("/settings");
+  };
 
   return (
     <div className="app-layout">
@@ -66,7 +98,7 @@ function Layout({ onLogout }: LayoutProps) {
           ))}
 
           <div className="nav-section">
-            <p className="nav-section__title">설정 및 지원</p>
+            <p className="nav-section__title">지원</p>
             {settingsItems.map((item) => (
               <NavLink
                 key={item.path}
@@ -83,7 +115,11 @@ function Layout({ onLogout }: LayoutProps) {
         </nav>
 
         <div className="sidebar__user">
-          <div className="sidebar__user-content">
+          <div
+            className="sidebar__user-content sidebar__user-content--clickable"
+            onClick={handleUserClick}
+            title="시스템 설정"
+          >
             <div
               className="sidebar__user-avatar"
               style={{
@@ -91,13 +127,16 @@ function Layout({ onLogout }: LayoutProps) {
               }}
             />
             <div className="sidebar__user-info">
-              <p className="sidebar__user-name">김은혜 목사</p>
-              <p className="sidebar__user-role">관리자 권한</p>
+              <p className="sidebar__user-name">
+                {churchSettings.pastorName || "관리자"}
+              </p>
+              <p className="sidebar__user-role">설정 및 관리</p>
             </div>
-            <button className="sidebar__logout-btn" onClick={handleLogout} title="로그아웃">
-              <span className="material-symbols-outlined">logout</span>
-            </button>
+            <span className="material-symbols-outlined sidebar__user-settings">settings</span>
           </div>
+          <button className="sidebar__logout-btn" onClick={handleLogout} title="로그아웃">
+            <span className="material-symbols-outlined">logout</span>
+          </button>
         </div>
       </aside>
 
@@ -112,16 +151,6 @@ function Layout({ onLogout }: LayoutProps) {
             >
               <span className="material-symbols-outlined">menu</span>
             </button>
-            <div className="top-header__search">
-              <div className="top-header__search-icon">
-                <span className="material-symbols-outlined">search</span>
-              </div>
-              <input
-                type="text"
-                className="top-header__search-input"
-                placeholder="성도 이름, 전화번호, 헌금 내역 검색..."
-              />
-            </div>
           </div>
           <div className="top-header__right">
             <button className="top-header__notification">

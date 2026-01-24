@@ -47,8 +47,19 @@
         "copyFile": true,
         "exists": true,
         "scope": [
-          "$APPDATA/*",
-          "$DOCUMENT/*"
+          "$APPDATA/**",
+          "$DOCUMENT/**",
+          "$RESOURCE/**"
+        ]
+      },
+      "path": {
+        "all": true
+      },
+      "protocol": {
+        "asset": true,
+        "assetScope": [
+          "$APPDATA/**",
+          "$DOCUMENT/**"
         ]
       }
     },

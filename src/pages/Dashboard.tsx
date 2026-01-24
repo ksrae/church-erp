@@ -1,293 +1,752 @@
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { loadData, saveData } from "../utils/fileStorage";
+
+
+const MEMBERS_STORAGE_KEY = "church_erp_members";
+const FINANCE_STORAGE_KEY = "church_erp_finance";
+
+interface DashboardStats {
+  totalMembers: number;
+  totalIncome: number;
+  totalExpense: number;
+}
+
+
+
+interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string;
+  eventEndDate?: string; // 종료 날짜 (기간 설정 시)
+  time: string;
+  endTime?: string;
+  description: string;
+  category: "worship" | "meeting" | "event" | "other";
+  repeat: "none" | "weekly" | "monthly" | "yearly";
+}
+
+const categoryColors: Record<string, { bg: string; text: string; label: string }> = {
+  worship: { bg: "#dbeafe", text: "#1d4ed8", label: "예배" },
+  meeting: { bg: "#dcfce7", text: "#16a34a", label: "모임" },
+  event: { bg: "#fef3c7", text: "#d97706", label: "행사" },
+  other: { bg: "#f3e8ff", text: "#7c3aed", label: "기타" },
+};
 
 function Dashboard() {
-  const kpiData = [
-    {
-      icon: "diversity_3",
-      iconClass: "kpi-card__icon--blue",
-      label: "지난주 주일예배 출석",
-      value: "124",
-      unit: "명",
-      change: "+5.2%",
-      isUp: true,
-    },
-    {
-      icon: "payments",
-      iconClass: "kpi-card__icon--indigo",
-      label: "금주 헌금 합계",
-      value: "₩2,450,000",
-      unit: "",
-      change: "+2.1%",
-      isUp: true,
-    },
-    {
-      icon: "person_add",
-      iconClass: "kpi-card__icon--amber",
-      label: "새가족 등록",
-      value: "3",
-      unit: "가정",
-      change: "지난주 대비 동일",
-      isUp: false,
-    },
-  ];
+  const [stats, setStats] = useState<DashboardStats>({
+    totalMembers: 0,
+    totalIncome: 0,
+    totalExpense: 0,
+  });
 
-  const quickActions = [
-    {
-      icon: "how_to_reg",
-      iconClass: "quick-action-btn__icon--blue",
-      title: "성도 등록",
-      subtitle: "새가족 카드 작성",
-      link: "/members/register",
-    },
-    {
-      icon: "attach_money",
-      iconClass: "quick-action-btn__icon--indigo",
-      title: "헌금 입력",
-      subtitle: "주일/감사 헌금",
-      link: "/finance",
-    },
-    {
-      icon: "receipt_long",
-      iconClass: "quick-action-btn__icon--green",
-      title: "지출 품의",
-      subtitle: "전표 및 영수증",
-      link: "/finance",
-    },
-  ];
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [eventForm, setEventForm] = useState<Partial<CalendarEvent>>({
+    title: "",
+    date: "",
+    eventEndDate: "",
+    time: "09:00",
+    endTime: "10:00",
+    description: "",
+    category: "other",
+    repeat: "none",
+  });
 
-  const events = [
-    {
-      month: "10월",
-      day: "25",
-      title: "수요 기도회",
-      time: "19:30 - 21:00 · 본당",
-      tag: "예배",
-      tagClass: "event-item__tag--worship",
-    },
-    {
-      month: "10월",
-      day: "28",
-      title: "가을 전교인 체육대회",
-      time: "09:00 - 16:00 · 시민 체육관",
-      tag: "행사",
-      tagClass: "event-item__tag--event",
-    },
-    {
-      month: "10월",
-      day: "29",
-      title: "주일 연합 예배",
-      time: "11:00 - 12:30 · 대예배실",
-      tag: "예배",
-      tagClass: "event-item__tag--worship",
-    },
-  ];
+  // 데이터 로드
+  useEffect(() => {
+    const loadAllData = async () => {
 
-  const activities = [
-    {
-      color: "activity-item__dot--blue",
-      text: "<strong>이민수</strong> 성도님 정보가 수정되었습니다.",
-      meta: "30분 전 · 교구 관리자",
-    },
-    {
-      color: "activity-item__dot--green",
-      text: "<strong>10월 3주차</strong> 헌금 집계가 완료되었습니다.",
-      meta: "2시간 전 · 재정부",
-    },
-    {
-      color: "activity-item__dot--amber",
-      text: "<strong>박지영</strong> 새가족 등록카드가 접수되었습니다.",
-      meta: "어제 · 새가족팀",
-    },
-    {
-      color: "activity-item__dot--purple",
-      text: "<strong>유초등부</strong> 예산안 승인 요청.",
-      meta: "2일 전 · 교육부서",
-    },
-  ];
 
-  const chartData = [
-    { label: "1주전", height: "60%" },
-    { label: "2주전", height: "75%" },
-    { label: "3주전", height: "65%" },
-    { label: "이번주", height: "85%", active: true },
-  ];
+      // 성도 수 로드
+      const savedMembers = localStorage.getItem(MEMBERS_STORAGE_KEY);
+      if (savedMembers) {
+        try {
+          const parsed = JSON.parse(savedMembers);
+          setStats((prev) => ({ ...prev, totalMembers: parsed.length }));
+        } catch { }
+      }
+
+      // 재정 데이터 로드
+      const savedFinance = localStorage.getItem(FINANCE_STORAGE_KEY);
+      if (savedFinance) {
+        try {
+          const parsed = JSON.parse(savedFinance);
+          if (parsed.ledger) {
+            const totals = parsed.ledger.reduce(
+              (acc: { income: number; expense: number }, item: { income: number; expense: number }) => ({
+                income: acc.income + (item.income || 0),
+                expense: acc.expense + (item.expense || 0),
+              }),
+              { income: 0, expense: 0 }
+            );
+            setStats((prev) => ({
+              ...prev,
+              totalIncome: totals.income,
+              totalExpense: totals.expense,
+            }));
+          }
+        } catch { }
+      }
+
+      // 일정 로드 (파일 시스템)
+      try {
+        const loadedEvents = await loadData<CalendarEvent[]>("events");
+        if (loadedEvents) {
+          setEvents(loadedEvents);
+        } else {
+          // 파일이 없으면 localStorage 폴백 확인 (마이그레이션 용도)
+          const localEvents = localStorage.getItem("church_erp_events");
+          if (localEvents) {
+            const parsedLocal = JSON.parse(localEvents);
+            setEvents(parsedLocal);
+            // 파일로 저장해서 마이그레이션
+            await saveData("events", parsedLocal);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load events:", error);
+      }
+    };
+
+    loadAllData();
+  }, []);
+
+  // 일정 저장
+  const saveEvents = async (newEvents: CalendarEvent[]) => {
+    setEvents(newEvents);
+    try {
+      await saveData("events", newEvents);
+      // 백업용으로 localStorage에도 저장? 선택사항. 여기서는 제거.
+    } catch (error) {
+      console.error("Failed to save events:", error);
+      alert("일정 저장 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 금액 포맷팅
+  const formatCurrency = (amount: number): string => {
+    if (amount === 0) return "₩0";
+    if (amount >= 10000) {
+      return `₩${(amount / 10000).toLocaleString("ko-KR")}만`;
+    }
+    return `₩${amount.toLocaleString("ko-KR")}`;
+  };
+
+  // 캘린더 관련 함수들
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayIndex = firstDay.getDay();
+
+    const days: { date: Date; isCurrentMonth: boolean }[] = [];
+
+    // 이전 달 날짜
+    for (let i = startingDayIndex - 1; i >= 0; i--) {
+      days.push({
+        date: new Date(year, month, -i),
+        isCurrentMonth: false,
+      });
+    }
+
+    // 현재 달 날짜
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push({
+        date: new Date(year, month, i),
+        isCurrentMonth: true,
+      });
+    }
+
+    // 다음 달 날짜 (6주 채우기)
+    const remainingDays = 42 - days.length;
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push({
+        date: new Date(year, month + 1, i),
+        isCurrentMonth: false,
+      });
+    }
+
+    return days;
+  };
+
+  const formatDateKey = (date: Date) => {
+    return date.toISOString().split("T")[0];
+  };
+
+  const getEventsForDate = (dateStr: string) => {
+    return events.filter((event) => {
+      // 1. 단일 날짜 일치
+      if (event.date === dateStr) return true;
+
+      // 2. 기간 일정 (반복이 없을 때만 적용)
+      if (event.repeat === "none" && event.eventEndDate) {
+        return dateStr >= event.date && dateStr <= event.eventEndDate;
+      }
+
+      // 3. 반복 일정 처리 (기존 로직 유지)
+      if (event.repeat !== "none") {
+        const eventDate = new Date(event.date);
+        const checkDate = new Date(dateStr);
+        if (event.repeat === "weekly") {
+          return eventDate.getDay() === checkDate.getDay() && checkDate >= eventDate;
+        }
+        if (event.repeat === "monthly") {
+          return eventDate.getDate() === checkDate.getDate() && checkDate >= eventDate;
+        }
+        if (event.repeat === "yearly") {
+          return (
+            eventDate.getMonth() === checkDate.getMonth() &&
+            eventDate.getDate() === checkDate.getDate() &&
+            checkDate >= eventDate
+          );
+        }
+      }
+      return false;
+    });
+  };
+
+  const navigateMonth = (direction: number) => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + direction, 1));
+  };
+
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return (
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    );
+  };
+
+  // 일정 추가/수정 모달 열기
+  const openEventModal = (date?: string, event?: CalendarEvent) => {
+    if (event) {
+      setEditingEvent(event);
+      setEventForm({
+        title: event.title,
+        date: event.date,
+        eventEndDate: event.eventEndDate || "",
+        time: event.time,
+        endTime: event.endTime,
+        description: event.description,
+        category: event.category,
+        repeat: event.repeat,
+      });
+    } else {
+      setEditingEvent(null);
+      setEventForm({
+        title: "",
+        date: date || formatDateKey(new Date()),
+        eventEndDate: "",
+        time: "09:00",
+        endTime: "10:00",
+        description: "",
+        category: "other",
+        repeat: "none",
+      });
+    }
+    setShowEventModal(true);
+  };
+
+  // 일정 저장
+  const handleSaveEvent = () => {
+    if (!eventForm.title || !eventForm.date) {
+      alert("제목과 날짜를 입력해주세요.");
+      return;
+    }
+
+    // 종료 날짜가 시작 날짜보다 앞서면 경고
+    if (eventForm.eventEndDate && eventForm.eventEndDate < eventForm.date) {
+      alert("종료 날짜는 시작 날짜보다 이후여야 합니다.");
+      return;
+    }
+
+    const newEvent: CalendarEvent = {
+      id: editingEvent?.id || Date.now().toString(),
+      title: eventForm.title || "",
+      date: eventForm.date || "",
+      eventEndDate: eventForm.eventEndDate,
+      time: eventForm.time || "09:00",
+      endTime: eventForm.endTime,
+      description: eventForm.description || "",
+      category: eventForm.category || "other",
+      repeat: eventForm.repeat || "none",
+    };
+
+    let updatedEvents: CalendarEvent[];
+    if (editingEvent) {
+      updatedEvents = events.map((e) => (e.id === editingEvent.id ? newEvent : e));
+    } else {
+      updatedEvents = [...events, newEvent];
+    }
+
+    saveEvents(updatedEvents);
+    setShowEventModal(false);
+  };
+
+  // 일정 삭제
+  const handleDeleteEvent = (eventId: string) => {
+    const updatedEvents = events.filter((e) => e.id !== eventId);
+    saveEvents(updatedEvents);
+    setSelectedDate(null);
+  };
+
+  const days = getDaysInMonth(currentDate);
+  const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
+
+  // 선택된 날짜의 일정
+  const selectedDateEvents = selectedDate ? getEventsForDate(selectedDate) : [];
 
   return (
     <div className="dashboard">
-      {/* Welcome Section */}
-      <div className="dashboard__welcome">
-        <div className="dashboard__welcome-header">
-          <div>
-            <h1>
-              안녕하세요, 김은혜 목사님 <span>👋</span>
-            </h1>
-            <p>오늘의 교회 현황과 주요 일정을 확인하세요.</p>
-          </div>
-          <button className="dashboard__download-btn">
-            <span className="material-symbols-outlined">download</span>
-            주간 보고서 다운로드
-          </button>
-        </div>
-      </div>
-
       {/* KPI Cards */}
       <div className="dashboard__kpi-grid">
-        {kpiData.map((kpi, index) => (
-          <div className="kpi-card" key={index}>
-            <div className="kpi-card__header">
-              <div className={`kpi-card__icon ${kpi.iconClass}`}>
-                <span className="material-symbols-outlined">{kpi.icon}</span>
-              </div>
-              <span
-                className={`kpi-card__badge ${kpi.isUp ? "kpi-card__badge--up" : "kpi-card__badge--neutral"
-                  }`}
-              >
-                {kpi.isUp && (
-                  <span className="material-symbols-outlined">trending_up</span>
-                )}
-                {kpi.change}
-              </span>
-            </div>
-            <div className="kpi-card__content">
-              <p className="kpi-card__label">{kpi.label}</p>
-              <h3 className="kpi-card__value">
-                {kpi.value}
-                {kpi.unit && <span className="kpi-card__unit">{kpi.unit}</span>}
-              </h3>
-            </div>
+        <div className="kpi-card">
+          <div className="kpi-card__icon kpi-card__icon--blue">
+            <span className="material-symbols-outlined">diversity_3</span>
           </div>
-        ))}
+          <div className="kpi-card__content">
+            <p className="kpi-card__label">등록 성도</p>
+            <h3 className="kpi-card__value">
+              {stats.totalMembers}
+              <span className="kpi-card__unit">명</span>
+            </h3>
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-card__icon kpi-card__icon--indigo">
+            <span className="material-symbols-outlined">payments</span>
+          </div>
+          <div className="kpi-card__content">
+            <p className="kpi-card__label">총 수입</p>
+            <h3 className="kpi-card__value">{formatCurrency(stats.totalIncome)}</h3>
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-card__icon kpi-card__icon--amber">
+            <span className="material-symbols-outlined">receipt_long</span>
+          </div>
+          <div className="kpi-card__content">
+            <p className="kpi-card__label">총 지출</p>
+            <h3 className="kpi-card__value">{formatCurrency(stats.totalExpense)}</h3>
+          </div>
+        </div>
       </div>
 
-      {/* Main Grid */}
+      {/* Calendar Section */}
       <div className="dashboard__main-grid">
-        {/* Left Column */}
         <div className="dashboard__left-column">
-          {/* Quick Actions */}
-          <div className="quick-actions">
-            <h3 className="quick-actions__title">
-              <span className="material-symbols-outlined">bolt</span>
-              빠른 실행
-            </h3>
-            <div className="quick-actions__grid">
-              {quickActions.map((action, index) => (
-                <Link
-                  to={action.link}
-                  className="quick-action-btn"
-                  key={index}
-                >
-                  <div className={`quick-action-btn__icon ${action.iconClass}`}>
-                    <span className="material-symbols-outlined">
-                      {action.icon}
-                    </span>
-                  </div>
-                  <div className="quick-action-btn__text">
-                    <p className="quick-action-btn__title">{action.title}</p>
-                    <p className="quick-action-btn__subtitle">
-                      {action.subtitle}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Events */}
-          <div className="events-card">
-            <div className="events-card__header">
-              <h3 className="events-card__title">
-                주요 일정 (Upcoming Events)
+          <div className="calendar-card">
+            <div className="calendar-card__header">
+              <h3 className="calendar-card__title">
+                <span className="material-symbols-outlined">calendar_month</span>
+                일정 관리
               </h3>
-              <a href="#" className="events-card__link">
-                전체 보기
-              </a>
+              <div className="calendar-card__nav">
+                <button onClick={() => navigateMonth(-1)}>
+                  <span className="material-symbols-outlined">chevron_left</span>
+                </button>
+                <span className="calendar-card__month">
+                  {currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월
+                </span>
+                <button onClick={() => navigateMonth(1)}>
+                  <span className="material-symbols-outlined">chevron_right</span>
+                </button>
+              </div>
+              <button className="calendar-card__add-btn" onClick={() => openEventModal()}>
+                <span className="material-symbols-outlined">add</span>
+                일정 추가
+              </button>
             </div>
-            <div className="events-card__list">
-              {events.map((event, index) => (
-                <div className="event-item" key={index}>
-                  <div className="event-item__date">
-                    <span className="event-item__date-month">{event.month}</span>
-                    <span className="event-item__date-day">{event.day}</span>
-                  </div>
-                  <div className="event-item__content">
-                    <h4 className="event-item__title">{event.title}</h4>
-                    <p className="event-item__time">
-                      <span className="material-symbols-outlined">schedule</span>
-                      {event.time}
-                    </p>
-                  </div>
-                  <span className={`event-item__tag ${event.tagClass}`}>
-                    {event.tag}
-                  </span>
+
+            <div className="calendar-grid">
+              {/* Week Header */}
+              {weekDays.map((day, i) => (
+                <div
+                  key={day}
+                  className={`calendar-grid__weekday ${i === 0 ? "sunday" : ""} ${i === 6 ? "saturday" : ""}`}
+                >
+                  {day}
                 </div>
               ))}
+
+              {/* Days */}
+              {days.map((day, index) => {
+                const dateKey = formatDateKey(day.date);
+                const dayEvents = getEventsForDate(dateKey);
+                const dayOfWeek = day.date.getDay();
+
+                return (
+                  <div
+                    key={index}
+                    className={`calendar-grid__day ${!day.isCurrentMonth ? "other-month" : ""} ${isToday(day.date) ? "today" : ""
+                      } ${selectedDate === dateKey ? "selected" : ""}`}
+                    onClick={() => setSelectedDate(dateKey)}
+                  >
+                    <span
+                      className={`calendar-grid__day-number ${dayOfWeek === 0 ? "sunday" : ""} ${dayOfWeek === 6 ? "saturday" : ""
+                        }`}
+                    >
+                      {day.date.getDate()}
+                    </span>
+                    {dayEvents.length > 0 && (
+                      <div className="calendar-grid__events">
+                        {dayEvents.slice(0, 2).map((event) => (
+                          <div
+                            key={event.id}
+                            className="calendar-grid__event"
+                            style={{
+                              backgroundColor: categoryColors[event.category].bg,
+                              color: categoryColors[event.category].text,
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEventModal(undefined, event);
+                            }}
+                          >
+                            {event.title}
+                          </div>
+                        ))}
+                        {dayEvents.length > 2 && (
+                          <div className="calendar-grid__more">+{dayEvents.length - 2}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* Right Column */}
+        {/* Right Column - Selected Date Events */}
         <div className="dashboard__right-column">
-          {/* Attendance Chart */}
-          <div className="chart-card">
-            <div className="chart-card__header">
-              <h3 className="chart-card__title">주별 출석 추이</h3>
-              <span className="chart-card__label">최근 4주</span>
+          <div className="events-list-card">
+            <div className="events-list-card__header">
+              <h3 className="events-list-card__title">
+                {selectedDate
+                  ? `${new Date(selectedDate).getMonth() + 1}월 ${new Date(selectedDate).getDate()}일 일정`
+                  : "오늘 일정"}
+              </h3>
+              {selectedDate && (
+                <button
+                  className="events-list-card__add"
+                  onClick={() => openEventModal(selectedDate)}
+                >
+                  <span className="material-symbols-outlined">add</span>
+                </button>
+              )}
             </div>
-            <div className="chart-card__bars">
-              {chartData.map((bar, index) => (
-                <div className="chart-bar" key={index}>
-                  <div
-                    className="chart-bar__fill"
-                    style={{
-                      height: bar.height,
-                      background: bar.active
-                        ? "var(--primary)"
-                        : `rgba(59, 130, 246, ${0.3 + index * 0.15})`,
-                      boxShadow: bar.active
-                        ? "0 4px 12px rgba(22, 100, 156, 0.3)"
-                        : "none",
-                    }}
-                  />
-                  <span
-                    className={`chart-bar__label ${bar.active ? "chart-bar__label--active" : ""
-                      }`}
-                  >
-                    {bar.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Recent Activity */}
-          <div className="activity-card">
-            <div className="activity-card__header">
-              <h3 className="activity-card__title">최근 변동 사항</h3>
-            </div>
-            <div className="activity-card__list">
-              {activities.map((activity, index) => (
-                <div className="activity-item" key={index}>
-                  <div className="activity-item__content">
-                    <div className={`activity-item__dot ${activity.color}`} />
-                    <div>
-                      <p
-                        className="activity-item__text"
-                        dangerouslySetInnerHTML={{ __html: activity.text }}
-                      />
-                      <p className="activity-item__meta">{activity.meta}</p>
+            <div className="events-list-card__content">
+              {selectedDateEvents.length > 0 ? (
+                selectedDateEvents.map((event) => (
+                  <div key={event.id} className="event-list-item">
+                    <div
+                      className="event-list-item__indicator"
+                      style={{ backgroundColor: categoryColors[event.category].text }}
+                    />
+                    <div className="event-list-item__content">
+                      <div className="event-list-item__header">
+                        <h4 className="event-list-item__title">{event.title}</h4>
+                        <span
+                          className="event-list-item__category"
+                          style={{
+                            backgroundColor: categoryColors[event.category].bg,
+                            color: categoryColors[event.category].text,
+                          }}
+                        >
+                          {categoryColors[event.category].label}
+                        </span>
+                      </div>
+                      <p className="event-list-item__time">
+                        <span className="material-symbols-outlined">schedule</span>
+                        {event.time}
+                        {event.endTime && ` - ${event.endTime}`}
+                        {event.repeat !== "none" && (
+                          <span className="event-list-item__repeat">
+                            <span className="material-symbols-outlined">repeat</span>
+                            {event.repeat === "weekly" && "매주"}
+                            {event.repeat === "monthly" && "매월"}
+                            {event.repeat === "yearly" && "매년"}
+                          </span>
+                        )}
+                      </p>
+                      {event.description && (
+                        <p className="event-list-item__description">{event.description}</p>
+                      )}
+                    </div>
+                    <div className="event-list-item__actions">
+                      <button
+                        onClick={() => openEventModal(undefined, event)}
+                        title="수정"
+                      >
+                        <span className="material-symbols-outlined">edit</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm("정말 이 일정을 삭제하시겠습니까?")) {
+                            handleDeleteEvent(event.id);
+                          }
+                        }}
+                        title="삭제"
+                      >
+                        <span className="material-symbols-outlined">delete</span>
+                      </button>
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="events-list-card__empty">
+                  <span className="material-symbols-outlined">event_busy</span>
+                  <p>등록된 일정이 없습니다.</p>
+                  {selectedDate && (
+                    <button onClick={() => openEventModal(selectedDate)}>
+                      일정 추가하기
+                    </button>
+                  )}
                 </div>
-              ))}
+              )}
             </div>
-            <div className="activity-card__footer">
-              <a href="#" className="activity-card__more">
-                더 많은 활동 보기
-              </a>
+          </div>
+
+          {/* Summary Card */}
+          <div className="chart-card" style={{ marginTop: "1rem" }}>
+            <div className="chart-card__header">
+              <h3 className="chart-card__title">이번 달 일정 요약</h3>
+            </div>
+            <div style={{ padding: "1rem" }}>
+              {Object.entries(categoryColors).map(([key, value]) => {
+                const count = events.filter(
+                  (e) =>
+                    e.category === key &&
+                    new Date(e.date).getMonth() === currentDate.getMonth() &&
+                    new Date(e.date).getFullYear() === currentDate.getFullYear()
+                ).length;
+                return (
+                  <div
+                    key={key}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "0.5rem 0",
+                      borderBottom: "1px solid var(--border-color)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <span
+                        style={{
+                          width: "0.75rem",
+                          height: "0.75rem",
+                          borderRadius: "50%",
+                          backgroundColor: value.text,
+                        }}
+                      />
+                      <span>{value.label}</span>
+                    </div>
+                    <strong>{count}개</strong>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Event Modal */}
+      {showEventModal && (
+        <div className="modal-overlay" onClick={() => setShowEventModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h2 className="modal__title">
+                {editingEvent ? "일정 수정" : "새 일정 추가"}
+              </h2>
+              <button className="modal__close" onClick={() => setShowEventModal(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="modal__content">
+              <div className="form-group">
+                <label className="form-label">
+                  제목 <span className="required">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="일정 제목을 입력하세요"
+                  value={eventForm.title}
+                  onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>
+                    일시 <span className="required">*</span>
+                  </label>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.375rem",
+                      fontSize: "0.8125rem",
+                      color: eventForm.repeat !== "none" ? "#9ca3af" : "var(--text-primary)",
+                      cursor: eventForm.repeat !== "none" ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!eventForm.eventEndDate}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setEventForm({ ...eventForm, eventEndDate: eventForm.date });
+                        } else {
+                          setEventForm({ ...eventForm, eventEndDate: "" });
+                        }
+                      }}
+                      disabled={eventForm.repeat !== "none"}
+                      style={{ accentColor: "var(--primary)" }}
+                    />
+                    기간 설정
+                  </label>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={eventForm.date}
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      // 만약 종료 날짜가 있고 시작 날짜가 종료 날짜보다 뒤라면 종료 날짜도 이동
+                      if (eventForm.eventEndDate && eventForm.eventEndDate < newDate) {
+                        setEventForm({ ...eventForm, date: newDate, eventEndDate: newDate });
+                      } else {
+                        setEventForm({ ...eventForm, date: newDate });
+                      }
+                    }}
+                    style={{ flex: 1 }}
+                  />
+                  {eventForm.eventEndDate && (
+                    <>
+                      <span style={{ color: "var(--text-secondary)" }}>~</span>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={eventForm.eventEndDate}
+                        onChange={(e) => setEventForm({ ...eventForm, eventEndDate: e.target.value })}
+                        style={{ flex: 1 }}
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">시작 시간</label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={eventForm.time}
+                    onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">종료 시간</label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={eventForm.endTime}
+                    onChange={(e) => setEventForm({ ...eventForm, endTime: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">카테고리</label>
+                  <select
+                    className="form-select"
+                    value={eventForm.category}
+                    onChange={(e) =>
+                      setEventForm({ ...eventForm, category: e.target.value as CalendarEvent["category"] })
+                    }
+                  >
+                    <option value="worship">예배</option>
+                    <option value="meeting">모임</option>
+                    <option value="event">행사</option>
+                    <option value="other">기타</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">반복</label>
+                  <select
+                    className="form-select"
+                    value={eventForm.repeat}
+                    onChange={(e) =>
+                      setEventForm({ ...eventForm, repeat: e.target.value as CalendarEvent["repeat"] })
+                    }
+                  >
+                    <option value="none">반복 안함</option>
+                    <option value="weekly">매주</option>
+                    <option value="monthly">매월</option>
+                    <option value="yearly">매년</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">설명</label>
+                <textarea
+                  className="form-textarea"
+                  rows={3}
+                  placeholder="일정에 대한 설명을 입력하세요"
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="modal__footer" style={{ justifyContent: "space-between" }}>
+              <div>
+                {editingEvent && (
+                  <button
+                    className="btn btn--danger btn--outline"
+                    onClick={() => {
+                      if (confirm("정말 이 일정을 삭제하시겠습니까?")) {
+                        handleDeleteEvent(editingEvent.id);
+                        setShowEventModal(false);
+                      }
+                    }}
+                    style={{ color: "#ef4444", borderColor: "#ef4444" }}
+                  >
+                    <span className="material-symbols-outlined">delete</span>
+                    삭제
+                  </button>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button className="btn btn--outline" onClick={() => setShowEventModal(false)}>
+                  취소
+                </button>
+                <button className="btn btn--primary" onClick={handleSaveEvent}>
+                  <span className="material-symbols-outlined">check</span>
+                  {editingEvent ? "수정" : "저장"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
