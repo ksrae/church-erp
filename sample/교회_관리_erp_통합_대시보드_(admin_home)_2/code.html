@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Church ERP - Role Management</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#16649c",
+                        "primary-dark": "#0f4c7a",
+                        "background-light": "#f3f6f8",
+                        "background-dark": "#21262c",
+                        "sidebar": "#21262c",
+                        "card-white": "#ffffff",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "Noto Sans KR", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.625rem",
+                        "xl": "1rem", 
+                        "full": "9999px"
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>::-webkit-scrollbar {
+    width: 8px;
+    height: 8px
+    }
+::-webkit-scrollbar-track {
+    background: transparent
+    }
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px
+    }
+.sidebar-item:hover .icon-wrapper {
+    background-color: rgba(255, 255, 255, 0.1)
+    }
+.custom-checkbox:checked {
+    background-color: #16649c;
+    border-color: #16649c;
+    background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuAK3lksGWVIBJPKiwapjNRR-3d55N9kGQ3_Fxrkb8Elxj0y0WGG0uCvVy0gVnuZ1TJ9D5-1x7gbYgzIjh7pfy2De2yc9Js6pxFduobMVDYc6HHWfu693APZNhSo6VCbh2TCicG7objP_3OKt5Lf66_sSnizADvi7XbtDvf1EAtjVTdQD4ZaRnQfTjIWavTUNcegBs2mt5dFBA5deh8Gji2V-907dYZLxEmAfZGgXkYdfpUS0X_jfuWN4W1yxL-Uajd-Ri8TOo2YA4YT)
+    }</style>
+</head>
+<body class="bg-background-light font-display text-slate-800 antialiased h-screen overflow-hidden flex">
+<aside class="w-[260px] bg-sidebar flex-shrink-0 flex flex-col h-full border-r border-slate-800 shadow-xl z-20 transition-all duration-300">
+<div class="h-16 flex items-center px-6 border-b border-gray-700/50 bg-[#1d2228]">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center shadow-lg shadow-blue-900/50">
+<span class="material-symbols-outlined text-white text-[20px]">church</span>
+</div>
+<div>
+<h1 class="text-white text-sm font-bold tracking-wide">교회 관리 시스템</h1>
+<p class="text-gray-400 text-[10px] font-medium tracking-wider uppercase">Enterprise Edition</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 overflow-y-auto py-6 px-3 space-y-1">
+<a class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-blue-300 transition-colors">dashboard</span>
+<span class="text-sm font-medium">대시보드</span>
+</a>
+<a class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-blue-300 transition-colors">groups</span>
+<span class="text-sm font-medium">성도 관리</span>
+</a>
+<a class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-blue-300 transition-colors">account_balance_wallet</span>
+<span class="text-sm font-medium">회계/헌금 관리</span>
+</a>
+<a class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-blue-300 transition-colors">folder_open</span>
+<span class="text-sm font-medium">사역/교육 자료</span>
+</a>
+<a class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-blue-300 transition-colors">calendar_month</span>
+<span class="text-sm font-medium">일정/주보</span>
+</a>
+<div class="pt-4 mt-4 border-t border-gray-700/50">
+<p class="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">설정 및 지원</p>
+<a class="group flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary shadow-lg shadow-primary/30 border border-primary text-white transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="text-sm font-medium">시스템 설정</span>
+</a>
+<a class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-all duration-200" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:text-blue-300 transition-colors">help</span>
+<span class="text-sm font-medium">도움말</span>
+</a>
+</div>
+</nav>
+<div class="p-4 bg-[#1d2228] border-t border-gray-700/50">
+<div class="flex items-center gap-3">
+<div class="size-9 rounded-full bg-gray-600 bg-center bg-cover border-2 border-gray-500" data-alt="Profile picture of the pastor" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDsKyGvah5VfB5rMeoW7jKJZ_evt-8Bu3iN7-dcrkqEaStB4eDPbJIM__2TeCBb9Xwic-C7bbI5e2MwLqA3XgaXI9PNh1MkOdke02Nu7IvDuzEE7ipxwW_JPQMidk9ipIrzQNlTMogkx1oXVgsm2NkIMPkOfM-ZB7IAsn1yHIQG06AiuXIELqzwGXXknq-bVwqV3kKr5cHsMS6V3RIkmDdIq8S9f6tfcYXzydwq7hy5KdGLufaje_ZxYhWCnoIXGBKqlYg3qD2Fzfci');"></div>
+<div class="flex flex-col overflow-hidden">
+<p class="text-sm font-medium text-white truncate">김은혜 목사</p>
+<p class="text-xs text-gray-400 truncate">관리자 권한</p>
+</div>
+<button class="ml-auto text-gray-400 hover:text-white">
+<span class="material-symbols-outlined text-[20px]">logout</span>
+</button>
+</div>
+</div>
+</aside>
+<main class="flex-1 flex flex-col h-full overflow-hidden bg-background-light relative">
+<header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-10 shadow-sm">
+<div class="flex items-center gap-4 text-slate-500">
+<button class="lg:hidden p-1 hover:text-slate-800">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<h2 class="text-lg font-bold text-slate-800 hidden md:block">사용자 권한 및 직급 관리</h2>
+</div>
+<div class="flex items-center gap-4">
+<button class="relative p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1.5 right-1.5 size-2 bg-red-500 rounded-full border-2 border-white"></span>
+</button>
+<div class="h-6 w-px bg-slate-200"></div>
+<div class="flex items-center gap-2">
+<span class="text-sm text-slate-600 font-medium">시스템 설정</span>
+</div>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto p-6 lg:p-10 scroll-smooth">
+<div class="max-w-7xl mx-auto flex flex-col gap-8">
+<div class="flex justify-between items-center">
+<div class="flex space-x-1 bg-slate-200/50 p-1 rounded-xl w-fit">
+<button class="px-4 py-2 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 transition-all">
+                            사용자 및 권한 관리
+                        </button>
+<button class="px-4 py-2 bg-white rounded-lg text-sm font-semibold text-primary shadow-sm ring-1 ring-slate-200 transition-all">
+                            직급(Role) 관리
+                        </button>
+</div>
+</div>
+<div class="flex flex-col gap-6">
+<div class="flex flex-col sm:flex-row justify-between items-end gap-4 border-b border-slate-200 pb-6">
+<div>
+<h3 class="text-2xl font-bold text-slate-800">직급 목록 관리</h3>
+<p class="text-slate-500 text-sm mt-1">교회 조직 내 사용되는 직급을 정의하고 관리합니다. (총 6개 직급)</p>
+</div>
+<button class="flex items-center gap-2 px-5 py-3 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary-dark transition-all shadow-lg shadow-primary/20 active:scale-95">
+<span class="material-symbols-outlined text-[20px]">add_circle</span>
+                            새 직급 추가
+                        </button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-soft hover:border-primary/50 transition-colors group">
+<div class="flex justify-between items-start mb-4">
+<div class="size-10 rounded-full bg-blue-50 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">supervisor_account</span>
+</div>
+<div class="flex gap-1">
+<button class="p-1.5 text-slate-400 hover:text-primary hover:bg-blue-50 rounded transition-colors" title="수정">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="삭제">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+<div>
+<h4 class="text-lg font-bold text-slate-800">담임목사</h4>
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide mt-1">Senior Pastor (Lv.1)</p>
+<div class="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
+<span class="material-symbols-outlined text-[16px] text-green-500">check_circle</span>
+<span>모든 권한 허용 (Admin)</span>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-soft hover:border-primary/50 transition-colors group">
+<div class="flex justify-between items-start mb-4">
+<div class="size-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+<span class="material-symbols-outlined">person</span>
+</div>
+<div class="flex gap-1">
+<button class="p-1.5 text-slate-400 hover:text-primary hover:bg-blue-50 rounded transition-colors" title="수정">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="삭제">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+<div>
+<h4 class="text-lg font-bold text-slate-800">부목사</h4>
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide mt-1">Associate Pastor (Lv.2)</p>
+<div class="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
+<span class="material-symbols-outlined text-[16px] text-primary">admin_panel_settings</span>
+<span>운영자 권한 (Editor)</span>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-soft hover:border-primary/50 transition-colors group">
+<div class="flex justify-between items-start mb-4">
+<div class="size-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+<span class="material-symbols-outlined">record_voice_over</span>
+</div>
+<div class="flex gap-1">
+<button class="p-1.5 text-slate-400 hover:text-primary hover:bg-blue-50 rounded transition-colors" title="수정">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="삭제">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+<div>
+<h4 class="text-lg font-bold text-slate-800">전도사</h4>
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide mt-1">Evangelist (Lv.3)</p>
+<div class="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
+<span class="material-symbols-outlined text-[16px] text-slate-400">lock</span>
+<span>교육부서 접근 가능</span>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-soft hover:border-primary/50 transition-colors group">
+<div class="flex justify-between items-start mb-4">
+<div class="size-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
+<span class="material-symbols-outlined">verified</span>
+</div>
+<div class="flex gap-1">
+<button class="p-1.5 text-slate-400 hover:text-primary hover:bg-blue-50 rounded transition-colors" title="수정">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="삭제">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+<div>
+<h4 class="text-lg font-bold text-slate-800">시무장로</h4>
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide mt-1">Elder (Lv.3)</p>
+<div class="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
+<span class="material-symbols-outlined text-[16px] text-slate-400">visibility</span>
+<span>당회 회의록 열람</span>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-soft hover:border-primary/50 transition-colors group">
+<div class="flex justify-between items-start mb-4">
+<div class="size-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
+<span class="material-symbols-outlined">account_balance</span>
+</div>
+<div class="flex gap-1">
+<button class="p-1.5 text-slate-400 hover:text-primary hover:bg-blue-50 rounded transition-colors" title="수정">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="삭제">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+<div>
+<h4 class="text-lg font-bold text-slate-800">회계부장</h4>
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide mt-1">Treasurer (Special)</p>
+<div class="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
+<span class="material-symbols-outlined text-[16px] text-emerald-500">payments</span>
+<span>재정/헌금 관리 전용</span>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-soft hover:border-primary/50 transition-colors group">
+<div class="flex justify-between items-start mb-4">
+<div class="size-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+<span class="material-symbols-outlined">assignment_ind</span>
+</div>
+<div class="flex gap-1">
+<button class="p-1.5 text-slate-400 hover:text-primary hover:bg-blue-50 rounded transition-colors" title="수정">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button class="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="삭제">
+<span class="material-symbols-outlined text-[18px]">delete</span>
+</button>
+</div>
+</div>
+<div>
+<h4 class="text-lg font-bold text-slate-800">간사</h4>
+<p class="text-xs font-medium text-slate-500 uppercase tracking-wide mt-1">Staff (Lv.4)</p>
+<div class="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
+<span class="material-symbols-outlined text-[16px] text-slate-400">event</span>
+<span>일정/주보 관리</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-4">
+<div class="flex items-center gap-2 mb-4">
+<span class="flex items-center justify-center size-8 rounded-lg bg-indigo-600 text-white">
+<span class="material-symbols-outlined text-[18px]">tune</span>
+</span>
+<h3 class="text-xl font-bold text-slate-800">권한 프리셋 설정 (Permission Preset)</h3>
+</div>
+<div class="bg-white rounded-xl border border-slate-200 shadow-soft flex flex-col lg:flex-row overflow-hidden h-auto min-h-[500px]">
+<div class="w-full lg:w-72 border-r border-slate-200 bg-slate-50 flex flex-col">
+<div class="p-4 border-b border-slate-200">
+<span class="text-xs font-bold text-slate-500 uppercase tracking-wider">직급 선택</span>
+</div>
+<div class="flex-1 overflow-y-auto p-2 space-y-1">
+<button class="w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors bg-white border border-slate-200 shadow-sm ring-1 ring-primary/20">
+<span class="size-2 rounded-full bg-primary"></span>
+<span class="text-sm font-bold text-primary">부목사 (Associate Pastor)</span>
+<span class="ml-auto material-symbols-outlined text-primary text-[16px]">chevron_right</span>
+</button>
+<button class="w-full flex items-center gap-3 p-3 rounded-lg text-left text-slate-600 hover:bg-white hover:shadow-sm transition-all group">
+<span class="size-2 rounded-full bg-slate-300 group-hover:bg-slate-400"></span>
+<span class="text-sm font-medium">전도사 (Evangelist)</span>
+</button>
+<button class="w-full flex items-center gap-3 p-3 rounded-lg text-left text-slate-600 hover:bg-white hover:shadow-sm transition-all group">
+<span class="size-2 rounded-full bg-slate-300 group-hover:bg-slate-400"></span>
+<span class="text-sm font-medium">회계부장 (Treasurer)</span>
+</button>
+<button class="w-full flex items-center gap-3 p-3 rounded-lg text-left text-slate-600 hover:bg-white hover:shadow-sm transition-all group">
+<span class="size-2 rounded-full bg-slate-300 group-hover:bg-slate-400"></span>
+<span class="text-sm font-medium">간사 (Staff)</span>
+</button>
+<button class="w-full flex items-center gap-3 p-3 rounded-lg text-left text-slate-600 hover:bg-white hover:shadow-sm transition-all group">
+<span class="size-2 rounded-full bg-slate-300 group-hover:bg-slate-400"></span>
+<span class="text-sm font-medium">시무장로 (Elder)</span>
+</button>
+</div>
+</div>
+<div class="flex-1 p-6 lg:p-8 flex flex-col">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h4 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        부목사 권한 설정
+                                        <span class="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">Editor</span>
+</h4>
+<p class="text-sm text-slate-500 mt-1">해당 직급 사용자에게 부여될 기본 메뉴 접근 권한을 체크하십시오.</p>
+</div>
+<button class="text-sm text-primary font-bold hover:underline">초기화</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 overflow-y-auto pr-2">
+<div class="space-y-3">
+<h5 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">성도 및 교구 관리</h5>
+<label class="flex items-start gap-3 p-3 rounded-lg border border-primary/30 bg-blue-50/30 cursor-pointer transition-colors">
+<input checked="" class="custom-checkbox mt-1 rounded border-slate-300 text-primary focus:ring-primary w-4 h-4" type="checkbox"/>
+<div>
+<span class="text-sm font-bold text-slate-800 block">성도 프로필 전체 조회 (DB)</span>
+<span class="text-xs text-slate-500">교인 명부 검색 및 상세 정보 열람</span>
+</div>
+</label>
+<label class="flex items-start gap-3 p-3 rounded-lg border border-primary/30 bg-blue-50/30 cursor-pointer transition-colors">
+<input checked="" class="custom-checkbox mt-1 rounded border-slate-300 text-primary focus:ring-primary w-4 h-4" type="checkbox"/>
+<div>
+<span class="text-sm font-bold text-slate-800 block">심방 기록 작성 및 수정</span>
+<span class="text-xs text-slate-500">심방 일지 기록 권한</span>
+</div>
+</label>
+</div>
+<div class="space-y-3">
+<h5 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">재정 및 행정</h5>
+<label class="flex items-start gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors">
+<input class="custom-checkbox mt-1 rounded border-slate-300 text-primary focus:ring-primary w-4 h-4" type="checkbox"/>
+<div>
+<span class="text-sm font-bold text-slate-700 block">회계/헌금 내역 관리</span>
+<span class="text-xs text-slate-500">헌금 입력 및 수정 (재정부 전용)</span>
+</div>
+</label>
+<label class="flex items-start gap-3 p-3 rounded-lg border border-primary/30 bg-blue-50/30 cursor-pointer transition-colors">
+<input checked="" class="custom-checkbox mt-1 rounded border-slate-300 text-primary focus:ring-primary w-4 h-4" type="checkbox"/>
+<div>
+<span class="text-sm font-bold text-slate-800 block">주보 및 일정 관리</span>
+<span class="text-xs text-slate-500">교회 행사 캘린더 편집</span>
+</div>
+</label>
+</div>
+<div class="space-y-3 md:col-span-2">
+<h5 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">시스템 접근</h5>
+<div class="flex flex-col md:flex-row gap-4">
+<label class="flex-1 flex items-start gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors">
+<input class="custom-checkbox mt-1 rounded border-slate-300 text-primary focus:ring-primary w-4 h-4" type="checkbox"/>
+<div>
+<span class="text-sm font-bold text-slate-700 block">시스템 환경설정</span>
+<span class="text-xs text-slate-500">관리자 전용 메뉴</span>
+</div>
+</label>
+<label class="flex-1 flex items-start gap-3 p-3 rounded-lg border border-primary/30 bg-blue-50/30 cursor-pointer transition-colors">
+<input checked="" class="custom-checkbox mt-1 rounded border-slate-300 text-primary focus:ring-primary w-4 h-4" type="checkbox"/>
+<div>
+<span class="text-sm font-bold text-slate-800 block">사역 자료실 접근</span>
+<span class="text-xs text-slate-500">파일 업로드 및 다운로드</span>
+</div>
+</label>
+</div>
+</div>
+</div>
+<div class="mt-6 pt-6 border-t border-slate-100 flex justify-end gap-3">
+<button class="px-5 py-2.5 border border-slate-300 text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-50 transition-colors">
+                                    변경 취소
+                                </button>
+<button class="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary-dark shadow-md shadow-blue-900/10 transition-colors">
+                                    설정 저장
+                                </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+
+</body></html>

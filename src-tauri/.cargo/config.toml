@@ -1,0 +1,15 @@
+[build]
+jobs = 1
+incremental = false
+
+[env]
+CARGO_INCREMENTAL = "0"
+
+[profile.dev]
+codegen-units = 1
+
+[profile.release]
+codegen-units = 1
+
+[net]
+retry = 2

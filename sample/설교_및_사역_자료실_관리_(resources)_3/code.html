@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Church ERP - Ministry Resources (List View)</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&amp;family=Public+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2d5d57",
+                        "primary-dark": "#234a45", 
+                        "secondary": "#C78864", 
+                        "background-light": "#f9f9f6",
+                        "background-dark": "#1a1f1d",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#252a28",
+                        "text-main": "#131615",
+                        "text-muted": "#6d7e7c",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "Noto Sans KR", "sans-serif"],
+                        "sans": ["Public Sans", "Noto Sans KR", "sans-serif"],
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px"},
+                    boxShadow: {
+                        'soft': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+                        'card': '0 0 0 1px rgba(0,0,0,0.03), 0 2px 8px rgba(0,0,0,0.04)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>.custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #e5e7eb;
+            border-radius: 20px;
+        }
+        body.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #374151;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-text-main dark:text-white font-display antialiased overflow-hidden selection:bg-primary/20 selection:text-primary">
+<div class="flex h-screen w-full">
+<aside class="w-64 flex-shrink-0 flex flex-col bg-surface-light dark:bg-surface-dark border-r border-[#e6e8e8] dark:border-[#333] z-20 transition-all duration-300">
+<div class="h-16 flex items-center px-6 border-b border-[#f1f3f3] dark:border-[#333]">
+<div class="size-8 rounded bg-primary flex items-center justify-center text-white mr-3">
+<span class="material-symbols-outlined text-xl">church</span>
+</div>
+<div>
+<h1 class="text-text-main dark:text-white text-base font-bold leading-tight">Church ERP</h1>
+<p class="text-text-muted text-xs font-normal">Grace Community</p>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar py-4 px-3 space-y-6">
+<div>
+<h3 class="px-3 mb-2 text-xs font-bold text-text-muted uppercase tracking-wider">Main Menu</h3>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">grid_view</span>
+<span class="text-sm font-medium">대시보드</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">group</span>
+<span class="text-sm font-medium">교인 관리</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 bg-primary/10 text-primary rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px] fill-1">folder_open</span>
+<span class="text-sm font-bold">자료실 관리</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">attach_money</span>
+<span class="text-sm font-medium">재정 관리</span>
+</a>
+</nav>
+</div>
+<div>
+<h3 class="px-3 mb-2 text-xs font-bold text-text-muted uppercase tracking-wider flex justify-between items-center">
+                    자료실 필터
+                    <button class="text-[10px] text-primary hover:underline">초기화</button>
+</h3>
+<div class="space-y-1 mb-4">
+<label class="flex items-center gap-3 px-3 py-1.5 cursor-pointer group hover:bg-gray-50 dark:hover:bg-white/5 rounded-md">
+<input checked="" class="rounded border-gray-300 text-primary focus:ring-primary size-4" type="checkbox"/>
+<span class="text-sm text-text-main dark:text-gray-300 group-hover:text-primary">주일 예배</span>
+</label>
+<label class="flex items-center gap-3 px-3 py-1.5 cursor-pointer group hover:bg-gray-50 dark:hover:bg-white/5 rounded-md">
+<input class="rounded border-gray-300 text-primary focus:ring-primary size-4" type="checkbox"/>
+<span class="text-sm text-text-main dark:text-gray-300 group-hover:text-primary">수요 기도회</span>
+</label>
+<label class="flex items-center gap-3 px-3 py-1.5 cursor-pointer group hover:bg-gray-50 dark:hover:bg-white/5 rounded-md">
+<input class="rounded border-gray-300 text-primary focus:ring-primary size-4" type="checkbox"/>
+<span class="text-sm text-text-main dark:text-gray-300 group-hover:text-primary">교육 부서</span>
+</label>
+<label class="flex items-center gap-3 px-3 py-1.5 cursor-pointer group hover:bg-gray-50 dark:hover:bg-white/5 rounded-md">
+<input class="rounded border-gray-300 text-primary focus:ring-primary size-4" type="checkbox"/>
+<span class="text-sm text-text-main dark:text-gray-300 group-hover:text-primary">주보/행사</span>
+</label>
+</div>
+<div class="px-3 mb-4">
+<h4 class="text-xs font-medium text-text-muted mb-2">날짜 범위</h4>
+<div class="flex items-center gap-2 bg-[#f1f3f3] dark:bg-white/10 p-2 rounded-lg border border-transparent focus-within:border-primary transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-text-muted text-sm">calendar_today</span>
+<span class="text-xs text-text-main dark:text-gray-300">2023.01 - 2023.12</span>
+</div>
+</div>
+<div class="px-3">
+<h4 class="text-xs font-medium text-text-muted mb-2">파일 형식</h4>
+<div class="flex gap-2">
+<button class="flex-1 h-8 rounded bg-[#f1f3f3] dark:bg-white/10 hover:bg-primary/10 hover:text-primary hover:border-primary border border-transparent text-xs font-medium text-text-muted transition-all flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px]">videocam</span> Video
+                        </button>
+<button class="flex-1 h-8 rounded bg-[#f1f3f3] dark:bg-white/10 hover:bg-primary/10 hover:text-primary hover:border-primary border border-transparent text-xs font-medium text-text-muted transition-all flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px]">description</span> PDF
+                        </button>
+</div>
+</div>
+</div>
+</div>
+<div class="p-4 border-t border-[#e6e8e8] dark:border-[#333]">
+<button class="flex items-center gap-3 w-full p-2 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors">
+<div class="size-8 rounded-full bg-cover bg-center border border-gray-200" data-alt="User profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB9HoYs9m5uCK2_5nLBUhz0GO0mBdItlubd6vbdNBZgQZQbD6l86C58LMRe9gLlncECg3Qb7KpBb97BGdJFbuf7U9VGH-K7oexPaSdX9FCfV6SgXdVuY_0vAkLxK_OzBKJkolWtOPIJ1CCxq676hija588c6VyqIlki7wTGNXqCEueZevZYWv4AScUQV6rT17_MTlqJ1p6WFBVr5vo5cNOxzimeMh0BHdxpGE0uvPOb2Hd6YeT2o4NTg4NdErsShCULxZFCoQY5byGm");'></div>
+<div class="flex flex-col items-start">
+<span class="text-sm font-bold text-text-main dark:text-white">김목사 (Admin)</span>
+<span class="text-xs text-text-muted">설정 및 로그아웃</span>
+</div>
+</button>
+</div>
+</aside>
+<main class="flex-1 flex flex-col min-w-0 bg-background-light dark:bg-background-dark relative">
+<header class="flex-shrink-0 h-16 bg-surface-light dark:bg-surface-dark border-b border-[#f1f3f3] dark:border-[#333] flex items-center justify-between px-6 z-10">
+<div class="flex items-center gap-4">
+<h2 class="text-text-main dark:text-white text-lg font-bold tracking-tight">자료실 관리 (Resources)</h2>
+</div>
+<div class="flex items-center gap-3">
+<div class="hidden md:flex relative group">
+<input class="w-64 h-9 pl-9 pr-4 bg-[#f1f3f3] dark:bg-white/5 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-text-muted" placeholder="제목 또는 설교자 검색..." type="text"/>
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted text-[18px]">search</span>
+</div>
+<div class="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
+<button class="size-9 rounded-lg flex items-center justify-center text-text-muted hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="알림">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button class="size-9 rounded-lg flex items-center justify-center text-text-muted hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="도움말">
+<span class="material-symbols-outlined text-[20px]">help</span>
+</button>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto p-6 md:p-8 lg:p-10 scroll-smooth">
+<div class="max-w-[1400px] mx-auto flex flex-col gap-8">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div class="flex flex-col gap-2 max-w-2xl">
+<h1 class="text-3xl md:text-4xl font-black text-text-main dark:text-white tracking-tight">설교 및 사역 자료실</h1>
+<p class="text-text-muted dark:text-gray-400 text-base font-normal">
+                            지난 설교 영상, 주보, 교육 자료를 안전하게 보관하고 관리합니다.
+                        </p>
+</div>
+<div class="flex items-center gap-3 shrink-0">
+<div class="bg-white dark:bg-surface-dark rounded-lg border border-gray-200 dark:border-gray-700 p-1 flex">
+<button class="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-white/5 text-text-muted transition-colors">
+<span class="material-symbols-outlined text-[20px]">grid_view</span>
+</button>
+<button class="p-1.5 rounded bg-gray-100 dark:bg-white/10 text-primary font-bold shadow-sm transition-colors">
+<span class="material-symbols-outlined text-[20px]">view_list</span>
+</button>
+</div>
+<button class="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg shadow-lg shadow-primary/20 transition-all active:scale-95 font-bold text-sm">
+<span class="material-symbols-outlined text-[20px]">upload_file</span>
+<span>새 자료 등록</span>
+</button>
+</div>
+</div>
+<div class="flex flex-wrap gap-2 items-center">
+<span class="text-xs font-bold text-text-muted uppercase mr-2">활성 필터:</span>
+<div class="flex items-center gap-2 bg-white dark:bg-surface-dark border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-full shadow-sm">
+<span class="text-xs font-medium text-text-main dark:text-gray-300">주일 예배</span>
+<button class="text-text-muted hover:text-red-500 flex items-center"><span class="material-symbols-outlined text-[14px]">close</span></button>
+</div>
+<div class="flex items-center gap-2 bg-white dark:bg-surface-dark border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-full shadow-sm">
+<span class="text-xs font-medium text-text-main dark:text-gray-300">최근 3개월</span>
+<button class="text-text-muted hover:text-red-500 flex items-center"><span class="material-symbols-outlined text-[14px]">close</span></button>
+</div>
+<button class="text-xs font-medium text-primary hover:underline ml-2">모두 지우기</button>
+</div>
+<div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-card border border-gray-200 dark:border-gray-700 overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr>
+<th class="py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-gray-700 w-20 text-center">번호</th>
+<th class="py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-gray-700 w-36 text-center">구분</th>
+<th class="py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-gray-700">제목</th>
+<th class="py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-gray-700 w-32 text-center">작성자</th>
+<th class="py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-gray-700 w-32 text-center">등록일</th>
+<th class="py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-gray-700 w-28 text-center">첨부파일</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+<tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group cursor-pointer">
+<td class="py-4 px-6 text-sm text-text-muted text-center font-medium">145</td>
+<td class="py-4 px-6 text-center">
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary">주일 2부</span>
+</td>
+<td class="py-4 px-6">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-text-main dark:text-white group-hover:text-primary transition-colors">믿음의 여정: 광야를 지나 약속의 땅으로</span>
+<span class="text-xs text-text-muted mt-1 line-clamp-1">출애굽기 강해 14번째 시간. 고난 속에서 피어나는 믿음의 본질에 대하여.</span>
+</div>
+</td>
+<td class="py-4 px-6 text-sm text-text-main dark:text-gray-300 text-center font-medium">이성민 목사</td>
+<td class="py-4 px-6 text-sm text-text-muted text-center">2023.10.29</td>
+<td class="py-4 px-6 text-center">
+<div class="flex items-center justify-center gap-2">
+<button class="size-8 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-text-muted hover:text-primary transition-colors flex items-center justify-center" title="영상 보기">
+<span class="material-symbols-outlined text-[18px]">play_circle</span>
+</button>
+<button class="size-8 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-text-muted hover:text-primary transition-colors flex items-center justify-center" title="PDF 다운로드">
+<span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group cursor-pointer">
+<td class="py-4 px-6 text-sm text-text-muted text-center font-medium">144</td>
+<td class="py-4 px-6 text-center">
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#6d7e7c]/10 text-[#546160] dark:text-[#a0b0ae]">주보</span>
+</td>
+<td class="py-4 px-6">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-text-main dark:text-white group-hover:text-primary transition-colors">10월 5주차 주일 주보</span>
+<span class="text-xs text-text-muted mt-1 line-clamp-1">이번 주 교회 소식, 예배 순서 및 11월 행사 일정 안내.</span>
+</div>
+</td>
+<td class="py-4 px-6 text-sm text-text-main dark:text-gray-300 text-center font-medium">사무국</td>
+<td class="py-4 px-6 text-sm text-text-muted text-center">2023.10.29</td>
+<td class="py-4 px-6 text-center">
+<div class="flex items-center justify-center gap-2">
+<button class="size-8 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-text-muted hover:text-primary transition-colors flex items-center justify-center" title="다운로드">
+<span class="material-symbols-outlined text-[18px]">download</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group cursor-pointer">
+<td class="py-4 px-6 text-sm text-text-muted text-center font-medium">143</td>
+<td class="py-4 px-6 text-center">
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">수요 기도회</span>
+</td>
+<td class="py-4 px-6">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-text-main dark:text-white group-hover:text-primary transition-colors">산상수훈 강해 (12)</span>
+<span class="text-xs text-text-muted mt-1 line-clamp-1">마음이 청결한 자는 복이 있나니. 수요 예배 설교 오디오 파일.</span>
+</div>
+</td>
+<td class="py-4 px-6 text-sm text-text-main dark:text-gray-300 text-center font-medium">김철수 전도사</td>
+<td class="py-4 px-6 text-sm text-text-muted text-center">2023.10.25</td>
+<td class="py-4 px-6 text-center">
+<div class="flex items-center justify-center gap-2">
+<button class="size-8 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-text-muted hover:text-primary transition-colors flex items-center justify-center" title="오디오 듣기">
+<span class="material-symbols-outlined text-[18px]">headphones</span>
+</button>
+<button class="size-8 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-text-muted hover:text-primary transition-colors flex items-center justify-center" title="다운로드">
+<span class="material-symbols-outlined text-[18px]">download</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group cursor-pointer">
+<td class="py-4 px-6 text-sm text-text-muted text-center font-medium">142</td>
+<td class="py-4 px-6 text-center">
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-[#C78864]/10 text-[#C78864]">교육 부서</span>
+</td>
+<td class="py-4 px-6">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-text-main dark:text-white group-hover:text-primary transition-colors">2023 가을 소풍 사진 모음</span>
+<span class="text-xs text-text-muted mt-1 line-clamp-1">유치부 가을 소풍 활동 사진입니다. 아이들의 밝은 모습을 확인하세요.</span>
+</div>
+</td>
+<td class="py-4 px-6 text-sm text-text-main dark:text-gray-300 text-center font-medium">유치부</td>
+<td class="py-4 px-6 text-sm text-text-muted text-center">2023.10.22</td>
+<td class="py-4 px-6 text-center">
+<div class="flex items-center justify-center gap-2">
+<button class="size-8 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-text-muted hover:text-primary transition-colors flex items-center justify-center" title="사진 보기">
+<span class="material-symbols-outlined text-[18px]">photo_library</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group cursor-pointer">
+<td class="py-4 px-6 text-sm text-text-muted text-center font-medium">141</td>
+<td class="py-4 px-6 text-center">
+<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-gray-600/10 text-gray-600 dark:text-gray-400">특별 새벽기도</span>
+</td>
+<td class="py-4 px-6">
+<div class="flex flex-col">
+<span class="text-sm font-bold text-text-main dark:text-white group-hover:text-primary transition-colors">가을 특별 새벽기도회 (5일차)</span>
+<span class="text-xs text-text-muted mt-1 line-clamp-1">주제: 다시 기도로 일어서라. 본문: 느헤미야 1장.</span>
+</div>
+</td>
+<td class="py-4 px-6 text-sm text-text-main dark:text-gray-300 text-center font-medium">이성민 목사</td>
+<td class="py-4 px-6 text-sm text-text-muted text-center">2023.10.15</td>
+<td class="py-4 px-6 text-center">
+<div class="flex items-center justify-center gap-2">
+<button class="size-8 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-text-muted hover:text-primary transition-colors flex items-center justify-center" title="영상 보기">
+<span class="material-symbols-outlined text-[18px]">play_circle</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="flex justify-center mt-4 mb-8">
+<nav class="flex items-center gap-1 bg-white dark:bg-surface-dark p-1 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+<button class="size-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-white/5 text-text-muted disabled:opacity-50">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<button class="size-8 flex items-center justify-center rounded bg-primary text-white font-bold text-sm">1</button>
+<button class="size-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-white/5 text-text-muted font-medium text-sm">2</button>
+<button class="size-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-white/5 text-text-muted font-medium text-sm">3</button>
+<span class="px-2 text-text-muted text-xs">...</span>
+<button class="size-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-white/5 text-text-muted font-medium text-sm">12</button>
+<button class="size-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-white/5 text-text-muted disabled:opacity-50">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</nav>
+</div>
+</div>
+</div>
+</main>
+</div>
+
+</body></html>

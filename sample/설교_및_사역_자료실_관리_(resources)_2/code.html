@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Church ERP - 새 자료 등록 (New Resource Upload)</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&amp;family=Public+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2d5d57",
+                        "primary-dark": "#234a45", 
+                        "secondary": "#C78864", 
+                        "background-light": "#f9f9f6",
+                        "background-dark": "#1a1f1d",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#252a28",
+                        "text-main": "#131615",
+                        "text-muted": "#6d7e7c",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "Noto Sans KR", "sans-serif"],
+                        "sans": ["Public Sans", "Noto Sans KR", "sans-serif"],
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "full": "9999px"},
+                    boxShadow: {
+                        'soft': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+                        'card': '0 0 0 1px rgba(0,0,0,0.03), 0 2px 8px rgba(0,0,0,0.04)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>.custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #e5e7eb;
+            border-radius: 20px;
+        }
+        body.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #374151;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-text-main dark:text-white font-display antialiased overflow-hidden selection:bg-primary/20 selection:text-primary">
+<div class="flex h-screen w-full">
+<aside class="w-64 flex-shrink-0 flex flex-col bg-surface-light dark:bg-surface-dark border-r border-[#e6e8e8] dark:border-[#333] z-20 transition-all duration-300 hidden md:flex">
+<div class="h-16 flex items-center px-6 border-b border-[#f1f3f3] dark:border-[#333]">
+<div class="size-8 rounded bg-primary flex items-center justify-center text-white mr-3">
+<span class="material-symbols-outlined text-xl">church</span>
+</div>
+<div>
+<h1 class="text-text-main dark:text-white text-base font-bold leading-tight">Church ERP</h1>
+<p class="text-text-muted text-xs font-normal">Grace Community</p>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar py-4 px-3 space-y-6">
+<div>
+<h3 class="px-3 mb-2 text-xs font-bold text-text-muted uppercase tracking-wider">Main Menu</h3>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">grid_view</span>
+<span class="text-sm font-medium">대시보드</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">group</span>
+<span class="text-sm font-medium">교인 관리</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 bg-primary/10 text-primary rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px] fill-1">folder_open</span>
+<span class="text-sm font-bold">자료실 관리</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">attach_money</span>
+<span class="text-sm font-medium">재정 관리</span>
+</a>
+</nav>
+</div>
+<div>
+<h3 class="px-3 mb-2 text-xs font-bold text-text-muted uppercase tracking-wider flex justify-between items-center">
+                    바로가기
+                </h3>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] text-text-muted">list_alt</span>
+<span class="text-sm font-medium">전체 목록 보기</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors group" href="#">
+<span class="material-symbols-outlined text-[20px] text-text-muted">settings</span>
+<span class="text-sm font-medium">카테고리 설정</span>
+</a>
+</nav>
+</div>
+</div>
+<div class="p-4 border-t border-[#e6e8e8] dark:border-[#333]">
+<button class="flex items-center gap-3 w-full p-2 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors">
+<div class="size-8 rounded-full bg-cover bg-center border border-gray-200" data-alt="User profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB9HoYs9m5uCK2_5nLBUhz0GO0mBdItlubd6vbdNBZgQZQbD6l86C58LMRe9gLlncECg3Qb7KpBb97BGdJFbuf7U9VGH-K7oexPaSdX9FCfV6SgXdVuY_0vAkLxK_OzBKJkolWtOPIJ1CCxq676hija588c6VyqIlki7wTGNXqCEueZevZYWv4AScUQV6rT17_MTlqJ1p6WFBVr5vo5cNOxzimeMh0BHdxpGE0uvPOb2Hd6YeT2o4NTg4NdErsShCULxZFCoQY5byGm");'></div>
+<div class="flex flex-col items-start">
+<span class="text-sm font-bold text-text-main dark:text-white">김목사 (Admin)</span>
+<span class="text-xs text-text-muted">설정 및 로그아웃</span>
+</div>
+</button>
+</div>
+</aside>
+<main class="flex-1 flex flex-col min-w-0 bg-background-light dark:bg-background-dark relative">
+<header class="flex-shrink-0 h-16 bg-surface-light dark:bg-surface-dark border-b border-[#f1f3f3] dark:border-[#333] flex items-center justify-between px-6 z-10">
+<div class="flex items-center gap-4">
+<button class="md:hidden p-1 text-text-muted">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<div class="flex items-center text-sm font-medium text-text-muted gap-2">
+<span class="hover:text-primary cursor-pointer">자료실 관리</span>
+<span class="material-symbols-outlined text-xs">chevron_right</span>
+<span class="text-text-main dark:text-white font-bold">새 자료 등록</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="size-9 rounded-lg flex items-center justify-center text-text-muted hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="알림">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button class="size-9 rounded-lg flex items-center justify-center text-text-muted hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="도움말">
+<span class="material-symbols-outlined text-[20px]">help</span>
+</button>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto p-6 md:p-8 lg:p-10 scroll-smooth">
+<div class="max-w-3xl mx-auto flex flex-col gap-6">
+<div class="flex flex-col gap-2 pb-6 border-b border-gray-200 dark:border-gray-700">
+<h1 class="text-2xl md:text-3xl font-black text-text-main dark:text-white tracking-tight">새 자료 등록</h1>
+<p class="text-text-muted dark:text-gray-400 text-sm font-normal">
+                        예배 설교, 찬양 영상, 주보 등 교회 사역을 위한 새로운 자료를 업로드합니다.
+                    </p>
+</div>
+<form class="space-y-8 bg-surface-light dark:bg-surface-dark p-6 md:p-8 rounded-xl shadow-card border border-transparent dark:border-gray-700">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="md:col-span-2">
+<label class="block text-sm font-bold text-text-main dark:text-white mb-2" for="resource-title">
+                                자료 제목 <span class="text-red-500">*</span>
+</label>
+<input class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-white/5 text-text-main dark:text-white text-sm py-2.5 px-4 focus:ring-2 focus:ring-primary focus:border-primary transition-shadow placeholder:text-gray-400" id="resource-title" placeholder="예: 11월 첫째주 주일예배 설교" type="text"/>
+</div>
+<div>
+<label class="block text-sm font-bold text-text-main dark:text-white mb-2" for="category">
+                                예배/사역 구분 <span class="text-red-500">*</span>
+</label>
+<div class="relative">
+<select class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-white/5 text-text-main dark:text-white text-sm py-2.5 px-4 pr-10 focus:ring-2 focus:ring-primary focus:border-primary appearance-none cursor-pointer" id="category">
+<option disabled="" selected="" value="">선택하세요</option>
+<option value="sunday">주일 예배</option>
+<option value="wednesday">수요 기도회</option>
+<option value="friday">금요 철야</option>
+<option value="dawn">새벽 기도</option>
+<option value="education">교육 부서</option>
+<option value="event">행사/기타</option>
+</select>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted material-symbols-outlined">expand_more</span>
+</div>
+</div>
+<div>
+<label class="block text-sm font-bold text-text-main dark:text-white mb-2" for="date-picker">
+                                날짜 선택 <span class="text-red-500">*</span>
+</label>
+<div class="relative">
+<input class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-white/5 text-text-main dark:text-white text-sm py-2.5 px-4 focus:ring-2 focus:ring-primary focus:border-primary" id="date-picker" type="date"/>
+</div>
+</div>
+<div class="md:col-span-2">
+<label class="block text-sm font-bold text-text-main dark:text-white mb-2" for="preacher">
+                                설교자 / 담당자
+                            </label>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-muted text-[20px]">person</span>
+<input class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-white/5 text-text-main dark:text-white text-sm py-2.5 pl-10 px-4 focus:ring-2 focus:ring-primary focus:border-primary placeholder:text-gray-400" id="preacher" placeholder="예: 이성민 목사" type="text"/>
+</div>
+</div>
+</div>
+<hr class="border-gray-100 dark:border-gray-700"/>
+<div class="space-y-6">
+<div class="flex items-center justify-between">
+<h3 class="text-base font-bold text-text-main dark:text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">folder_zip</span>
+                                파일 및 미디어
+                            </h3>
+<span class="text-xs text-text-muted">동영상, PDF, 이미지 파일 지원</span>
+</div>
+<div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group cursor-pointer relative">
+<input class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" type="file"/>
+<div class="flex flex-col items-center justify-center text-center space-y-3">
+<div class="size-14 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1 group-hover:scale-110 transition-transform duration-300">
+<span class="material-symbols-outlined text-3xl">cloud_upload</span>
+</div>
+<div>
+<p class="text-sm font-bold text-text-main dark:text-white">파일을 드래그하거나 클릭하여 선택하세요</p>
+<p class="text-xs text-text-muted mt-1">MP4, MOV, PDF, JPG, PNG (최대 2GB)</p>
+</div>
+</div>
+</div>
+<div>
+<label class="block text-sm font-bold text-text-main dark:text-white mb-2" for="youtube-link">
+                                유튜브 링크 (선택사항)
+                            </label>
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-red-500 text-[20px] group-focus-within:scale-110 transition-transform">play_circle</span>
+</div>
+<input class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-white/5 text-text-main dark:text-white text-sm py-2.5 pl-10 px-4 focus:ring-2 focus:ring-primary focus:border-primary placeholder:text-gray-400" id="youtube-link" placeholder="https://youtube.com/watch?v=..." type="text"/>
+</div>
+<p class="text-xs text-text-muted mt-1.5 ml-1">유튜브 링크를 입력하면 설교 영상이 자동으로 연결됩니다.</p>
+</div>
+</div>
+<div class="pt-4 flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-700 mt-2">
+<button class="px-5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-text-main dark:text-gray-300 font-medium text-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-colors" type="button">
+                            취소
+                        </button>
+<button class="px-6 py-2.5 rounded-lg bg-primary hover:bg-primary-dark text-white font-bold text-sm shadow-md shadow-primary/20 transition-all active:scale-95 flex items-center gap-2" type="submit">
+<span class="material-symbols-outlined text-[18px]">save</span>
+                            저장하기
+                        </button>
+</div>
+</form>
+</div>
+</div>
+</main>
+</div>
+
+</body></html>
