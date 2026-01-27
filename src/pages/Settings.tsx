@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useOutletContext } from "react-router-dom";
 import {
   currencies,
   CurrencyCode,
@@ -6,6 +7,8 @@ import {
   setCurrencyCode,
 } from "../utils/currency";
 import { loadData, saveData } from "../utils/fileStorage";
+import AdminManagement from "../components/settings/AdminManagement";
+import { LayoutOutletContext } from "../components/Layout";
 
 const SETTINGS_STORAGE_KEY = "church_erp_settings";
 
@@ -60,10 +63,13 @@ const defaultSettings: SettingsData = {
 
 function Settings() {
   const [settings, setSettings] = useState<SettingsData>(defaultSettings);
-  const [activeTab, setActiveTab] = useState<"church" | "system" | "data" | "about" | "accounts">("church");
+  const [activeTab, setActiveTab] = useState<"church" | "system" | "data" | "about" | "accounts" | "admin">("church");
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // Current user from Layout context
+  const { currentUser } = useOutletContext<LayoutOutletContext>();
 
   // Accounts State
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -317,6 +323,7 @@ function Settings() {
     { id: "church" as const, icon: "church", label: "교회 정보" },
     { id: "system" as const, icon: "tune", label: "시스템 설정" },
     { id: "accounts" as const, icon: "category", label: "계정 관리" },
+    { id: "admin" as const, icon: "admin_panel_settings", label: "관리자 관리" },
     { id: "data" as const, icon: "storage", label: "데이터 관리" },
     { id: "about" as const, icon: "info", label: "앱 정보" },
   ];
@@ -534,6 +541,20 @@ function Settings() {
                   {isSaving ? "저장 중..." : "저장하기"}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Admin Management Tab */}
+          {activeTab === "admin" && (
+            <div className="settings-section">
+              <h2 className="settings-section__title">
+                <span className="material-symbols-outlined">admin_panel_settings</span>
+                관리자 관리
+              </h2>
+              <p className="settings-section__description">
+                시스템에 로그인할 수 있는 관리자를 등록하고 권한을 설정합니다.
+              </p>
+              <AdminManagement currentUser={currentUser} />
             </div>
           )}
 

@@ -15,7 +15,7 @@ import {
 import { appDataDir, join } from "@tauri-apps/api/path";
 
 // 데이터 타입 정의
-export type DataType = "members" | "finance" | "resources" | "settings" | "events" | "org_groups";
+export type DataType = "members" | "finance" | "resources" | "settings" | "events" | "org_groups" | "admins";
 
 /**
  * Tauri 환경 여부 확인

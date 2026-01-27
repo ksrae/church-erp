@@ -59,9 +59,9 @@ function Dashboard() {
     const loadAllData = async () => {
       // 성도 수 로드 (파일 시스템)
       try {
-        const membersData = await loadData<{ members: unknown[] }>("members", "members.json");
-        if (membersData && membersData.members) {
-          setStats((prev) => ({ ...prev, totalMembers: membersData.members.length }));
+        const membersData = await loadData<unknown[]>("members", "members.json");
+        if (membersData && Array.isArray(membersData)) {
+          setStats((prev) => ({ ...prev, totalMembers: membersData.length }));
         }
       } catch (error) {
         console.error("Failed to load members:", error);

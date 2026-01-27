@@ -1,10 +1,12 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { AdminUser, rolePermissions, roleLabels } from "../types/admin";
 
 const SETTINGS_STORAGE_KEY = "church_erp_settings";
 
 interface LayoutProps {
   onLogout: () => void;
+  currentUser?: AdminUser | null;
 }
 
 interface ChurchSettings {
@@ -12,7 +14,12 @@ interface ChurchSettings {
   pastorName: string;
 }
 
-function Layout({ onLogout }: LayoutProps) {
+// Context type for Outlet
+export interface LayoutOutletContext {
+  currentUser: AdminUser | null;
+}
+
+function Layout({ onLogout, currentUser }: LayoutProps) {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [churchSettings, setChurchSettings] = useState<ChurchSettings>({
@@ -43,12 +50,31 @@ function Layout({ onLogout }: LayoutProps) {
     navigate("/login");
   };
 
-  const navItems = [
+  // Check if user has access to a path
+  const hasAccess = (path: string): boolean => {
+    if (!currentUser) return true; // No user = show all (will be redirected anyway)
+
+    const permissions = rolePermissions[currentUser.role];
+
+    // Super admin has access to everything
+    if (permissions.includes("*")) return true;
+
+    // Check specific path
+    return permissions.some(p => {
+      if (p === "/") return path === "/";
+      return path.startsWith(p);
+    });
+  };
+
+  const allNavItems = [
     { path: "/", icon: "dashboard", label: "대시보드" },
     { path: "/members", icon: "groups", label: "성도 관리" },
     { path: "/finance", icon: "account_balance_wallet", label: "회계/헌금 관리" },
     { path: "/resources", icon: "folder_open", label: "사역/교육 자료" },
   ];
+
+  // Filter nav items based on user permissions
+  const navItems = allNavItems.filter(item => hasAccess(item.path));
 
   const settingsItems = [
     { path: "/help", icon: "help", label: "도움말" },
@@ -65,6 +91,10 @@ function Layout({ onLogout }: LayoutProps) {
   const handleUserClick = () => {
     navigate("/settings");
   };
+
+  // Get display name
+  const displayName = currentUser?.memberName || currentUser?.username || churchSettings.pastorName || "관리자";
+  const displayRole = currentUser ? roleLabels[currentUser.role] : "설정 및 관리";
 
   return (
     <div className="app-layout">
@@ -123,14 +153,27 @@ function Layout({ onLogout }: LayoutProps) {
             <div
               className="sidebar__user-avatar"
               style={{
-                backgroundImage: `url('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop')`,
+                background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark, #0d4f7a) 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "white",
+                fontWeight: "bold",
+                fontSize: "1rem",
               }}
-            />
+            >
+              {displayName.charAt(0)}
+            </div>
             <div className="sidebar__user-info">
               <p className="sidebar__user-name">
-                {churchSettings.pastorName || "관리자"}
+                {displayName}
               </p>
-              <p className="sidebar__user-role">설정 및 관리</p>
+              <p className="sidebar__user-role" style={{
+                fontSize: "0.75rem",
+                color: currentUser?.role === "super" ? "var(--primary)" : "var(--text-secondary)"
+              }}>
+                {displayRole}
+              </p>
             </div>
             <span className="material-symbols-outlined sidebar__user-settings">settings</span>
           </div>
@@ -164,7 +207,7 @@ function Layout({ onLogout }: LayoutProps) {
 
         {/* Page Content */}
         <div className="page-content">
-          <Outlet />
+          <Outlet context={{ currentUser: currentUser || null } satisfies LayoutOutletContext} />
         </div>
       </main>
     </div>
