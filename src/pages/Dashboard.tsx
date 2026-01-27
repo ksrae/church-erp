@@ -3,7 +3,6 @@ import { loadData, saveData } from "../utils/fileStorage";
 
 
 const MEMBERS_STORAGE_KEY = "church_erp_members";
-const FINANCE_STORAGE_KEY = "church_erp_finance";
 
 interface DashboardStats {
   totalMembers: number;
@@ -58,37 +57,52 @@ function Dashboard() {
   // 데이터 로드
   useEffect(() => {
     const loadAllData = async () => {
-
-
-      // 성도 수 로드
-      const savedMembers = localStorage.getItem(MEMBERS_STORAGE_KEY);
-      if (savedMembers) {
-        try {
-          const parsed = JSON.parse(savedMembers);
-          setStats((prev) => ({ ...prev, totalMembers: parsed.length }));
-        } catch { }
+      // 성도 수 로드 (파일 시스템)
+      try {
+        const membersData = await loadData<{ members: unknown[] }>("members", "members.json");
+        if (membersData && membersData.members) {
+          setStats((prev) => ({ ...prev, totalMembers: membersData.members.length }));
+        }
+      } catch (error) {
+        console.error("Failed to load members:", error);
+        // localStorage 폴백
+        const savedMembers = localStorage.getItem(MEMBERS_STORAGE_KEY);
+        if (savedMembers) {
+          try {
+            const parsed = JSON.parse(savedMembers);
+            setStats((prev) => ({ ...prev, totalMembers: parsed.length }));
+          } catch { }
+        }
       }
 
-      // 재정 데이터 로드
-      const savedFinance = localStorage.getItem(FINANCE_STORAGE_KEY);
-      if (savedFinance) {
-        try {
-          const parsed = JSON.parse(savedFinance);
-          if (parsed.ledger) {
-            const totals = parsed.ledger.reduce(
-              (acc: { income: number; expense: number }, item: { income: number; expense: number }) => ({
-                income: acc.income + (item.income || 0),
-                expense: acc.expense + (item.expense || 0),
-              }),
-              { income: 0, expense: 0 }
-            );
-            setStats((prev) => ({
-              ...prev,
-              totalIncome: totals.income,
-              totalExpense: totals.expense,
-            }));
-          }
-        } catch { }
+      // 재정 데이터 로드 (파일 시스템 - Finance 페이지와 동일한 구조)
+      try {
+        interface FinanceTransaction {
+          type: "income" | "expense";
+          amount: number;
+        }
+        interface FinanceData {
+          transactions: FinanceTransaction[];
+        }
+
+        const financeData = await loadData<FinanceData>("finance", "finance.json");
+        if (financeData && financeData.transactions) {
+          const income = financeData.transactions
+            .filter((t) => t.type === "income")
+            .reduce((sum, t) => sum + t.amount, 0);
+          const expense = financeData.transactions
+            .filter((t) => t.type === "expense")
+            .reduce((sum, t) => sum + t.amount, 0);
+
+          setStats((prev) => ({
+            ...prev,
+            totalIncome: income,
+            totalExpense: expense,
+          }));
+          console.log("✅ Dashboard finance loaded:", { income, expense });
+        }
+      } catch (error) {
+        console.error("Failed to load finance data:", error);
       }
 
       // 일정 로드 (파일 시스템)

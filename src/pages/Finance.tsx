@@ -1,383 +1,672 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { saveData, loadData } from "../utils/fileStorage";
+import {
+  formatCurrency as formatCurrencyUtil,
+  formatLargeCurrency,
+  getCurrencySymbol,
+  getCurrentCurrencyCode,
+  setupCurrencyListener,
+  CurrencyCode,
+} from "../utils/currency";
 
-const FINANCE_STORAGE_KEY = "church_erp_finance";
+// Types
+import {
+  Account,
+  Transaction,
+  FinanceData,
+  TabType,
+  DetailViewType,
+  LedgerRow,
+  AccountBreakdown,
+  ReportData,
+  initialFinanceData,
+  defaultAccounts,
+} from "../types/finance";
 
-interface LedgerItem {
-  id: string;
-  code: string;
-  name: string;
-  subName: string;
-  type: "asset" | "income" | "expense";
-  opening: number;
-  income: number;
-  expense: number;
-}
+// Components
+import {
+  FinanceSidebar,
+  FinanceHeader,
+  LedgerView,
+  ReportView,
+  TransactionManagementView,
+  AccountForm,
+  TransactionForm,
+} from "../components/finance";
+import { DeleteConfirmModal } from "../components/common";
 
-interface FinanceData {
-  ledger: LedgerItem[];
-  lastUpdated: string;
-}
-
+// =============== Main Component ===============
 function Finance() {
-  const [financeData, setFinanceData] = useState<FinanceData>({
-    ledger: [],
-    lastUpdated: "",
-  });
+  const [financeData, setFinanceData] = useState<FinanceData>(initialFinanceData);
+  const [activeTab, setActiveTab] = useState<TabType>("ledger");
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 저장된 재정 데이터 로드
+  // Modal states
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: "account" | "transaction"; id: string } | null>(null);
+
+  // Filter states
+  const [dateFilter, setDateFilter] = useState({
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0],
+    endDate: new Date().toISOString().split("T")[0],
+  });
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Report states
+  const [reportType, setReportType] = useState<"monthly" | "yearly">("monthly");
+  const [reportYear, setReportYear] = useState(new Date().getFullYear());
+  const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
+
+  // Currency state for reactive updates
+  const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(getCurrentCurrencyCode());
+  const [currencySymbol, setCurrencySymbol] = useState(getCurrencySymbol());
+
+  // Right panel detail view state
+  const [detailView, setDetailView] = useState<DetailViewType>("overview");
+
+  // Monthly settlement selector state
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [showMonthSelector, setShowMonthSelector] = useState(false);
+
+  // =============== Data Loading ===============
   useEffect(() => {
-    const savedFinance = localStorage.getItem(FINANCE_STORAGE_KEY);
-    if (savedFinance) {
+    const loadFinanceData = async () => {
+      setIsLoading(true);
+      console.log("🔄 Loading finance data...");
+
       try {
-        const parsed = JSON.parse(savedFinance);
-        setFinanceData(parsed);
-      } catch {
-        // 파싱 에러
+        const data = await loadData<FinanceData>("finance", "finance.json");
+
+        if (data && data.accounts && data.accounts.length > 0) {
+          console.log("✅ Finance data loaded:", {
+            accounts: data.accounts.length,
+            transactions: data.transactions?.length || 0,
+            lastUpdated: data.lastUpdated
+          });
+          setFinanceData(data);
+        } else {
+          console.log("📝 No existing data, creating initial data...");
+          const initialData: FinanceData = {
+            accounts: defaultAccounts,
+            transactions: [],
+            lastUpdated: new Date().toISOString(),
+          };
+          setFinanceData(initialData);
+          await saveData("finance", initialData, "finance.json");
+          console.log("✅ Initial data saved");
+        }
+      } catch (error) {
+        console.error("❌ Failed to load finance data:", error);
+        setFinanceData({
+          accounts: defaultAccounts,
+          transactions: [],
+          lastUpdated: new Date().toISOString(),
+        });
       }
-    }
+
+      setIsLoading(false);
+    };
+
+    loadFinanceData();
   }, []);
 
-  // 금액 포맷팅
-  const formatCurrency = (amount: number): string => {
-    if (amount === 0) return "0";
-    return amount.toLocaleString("ko-KR");
-  };
+  // Listen for currency changes
+  useEffect(() => {
+    const cleanup = setupCurrencyListener((newCode) => {
+      setCurrencyCode(newCode);
+      setCurrencySymbol(getCurrencySymbol());
+    });
+    return cleanup;
+  }, []);
 
-  // 합계 계산
-  const totals = financeData.ledger.reduce(
-    (acc, item) => ({
-      income: acc.income + item.income,
-      expense: acc.expense + item.expense,
-    }),
-    { income: 0, expense: 0 }
-  );
+  // =============== Data Saving ===============
+  const saveFinanceData = async (data: FinanceData) => {
+    const updatedData = { ...data, lastUpdated: new Date().toISOString() };
+    setFinanceData(updatedData);
 
-  // 닷 컬러 결정
-  const getDotClass = (type: string): string => {
-    switch (type) {
-      case "asset":
-        return "account-cell__dot--blue";
-      case "income":
-        return "account-cell__dot--green";
-      case "expense":
-        return "account-cell__dot--rose";
-      default:
-        return "account-cell__dot--blue";
+    console.log("💾 Saving finance data...", {
+      accounts: updatedData.accounts.length,
+      transactions: updatedData.transactions.length
+    });
+
+    try {
+      await saveData("finance", updatedData, "finance.json");
+      console.log("✅ Finance data saved successfully!");
+    } catch (error) {
+      console.error("❌ Failed to save finance data:", error);
     }
   };
 
-  // 현재 월 가져오기
-  const currentMonth = new Date().toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-  });
+  // =============== Account CRUD ===============
+  const handleSaveAccount = (account: Account) => {
+    let updatedAccounts: Account[];
+
+    if (editingAccount) {
+      updatedAccounts = financeData.accounts.map((a) =>
+        a.id === account.id ? account : a
+      );
+    } else {
+      updatedAccounts = [...financeData.accounts, { ...account, id: `acc-${Date.now()}` }];
+    }
+
+    saveFinanceData({ ...financeData, accounts: updatedAccounts });
+    setShowAccountModal(false);
+    setEditingAccount(null);
+  };
+
+  const handleDeleteAccount = () => {
+    if (!deleteTarget || deleteTarget.type !== "account") return;
+
+    const updatedAccounts = financeData.accounts.filter((a) => a.id !== deleteTarget.id);
+    const updatedTransactions = financeData.transactions.filter(
+      (t) => t.accountId !== deleteTarget.id
+    );
+
+    saveFinanceData({
+      ...financeData,
+      accounts: updatedAccounts,
+      transactions: updatedTransactions,
+    });
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+  };
+
+  // =============== Transaction CRUD ===============
+  const handleSaveTransaction = (transaction: Transaction) => {
+    console.log("📥 handleSaveTransaction called:", transaction);
+
+    let updatedTransactions: Transaction[];
+    const isEditing = editingTransaction && editingTransaction.id;
+
+    if (isEditing) {
+      updatedTransactions = financeData.transactions.map((t) =>
+        t.id === transaction.id ? transaction : t
+      );
+      console.log("✏️ Editing existing transaction:", transaction.id);
+    } else {
+      const newTransaction = {
+        ...transaction,
+        id: `txn-${Date.now()}`
+      };
+      updatedTransactions = [...financeData.transactions, newTransaction];
+      console.log("➕ Adding new transaction:", newTransaction.id);
+    }
+
+    setShowTransactionModal(false);
+    setEditingTransaction(null);
+    saveFinanceData({ ...financeData, transactions: updatedTransactions });
+
+    console.log("✅ Transaction saved, total:", updatedTransactions.length);
+  };
+
+  const handleDeleteTransaction = () => {
+    if (!deleteTarget || deleteTarget.type !== "transaction") return;
+
+    const updatedTransactions = financeData.transactions.filter(
+      (t) => t.id !== deleteTarget.id
+    );
+
+    saveFinanceData({ ...financeData, transactions: updatedTransactions });
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+  };
+
+  // =============== Computed Values ===============
+  const filteredTransactions = useMemo(() => {
+    return financeData.transactions.filter((t) => {
+      const dateMatch =
+        t.date >= dateFilter.startDate && t.date <= dateFilter.endDate;
+      const searchMatch =
+        searchTerm === "" ||
+        t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        financeData.accounts
+          .find((a) => a.id === t.accountId)
+          ?.name.toLowerCase()
+          .includes(searchTerm.toLowerCase());
+      return dateMatch && searchMatch;
+    });
+  }, [financeData.transactions, financeData.accounts, dateFilter, searchTerm]);
+
+  const incomeTransactions = useMemo(() =>
+    filteredTransactions.filter((t) => t.type === "income"),
+    [filteredTransactions]
+  );
+
+  const expenseTransactions = useMemo(() =>
+    filteredTransactions.filter((t) => t.type === "expense"),
+    [filteredTransactions]
+  );
+
+  const ledgerData: LedgerRow[] = useMemo(() => {
+    return financeData.accounts.map((account) => {
+      const accountTransactions = financeData.transactions.filter(
+        (t) => t.accountId === account.id
+      );
+      const income = accountTransactions
+        .filter((t) => t.type === "income")
+        .reduce((sum, t) => sum + t.amount, 0);
+      const expense = accountTransactions
+        .filter((t) => t.type === "expense")
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      return {
+        ...account,
+        opening: 0,
+        income,
+        expense,
+        balance: income - expense,
+      };
+    });
+  }, [financeData.accounts, financeData.transactions]);
+
+  // Get available months from transactions
+  const availableMonths = useMemo(() => {
+    const monthSet = new Set<string>();
+    financeData.transactions.forEach((t) => {
+      const date = new Date(t.date);
+      const key = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, "0")}`;
+      monthSet.add(key);
+    });
+    const currentKey = `${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, "0")}`;
+    monthSet.add(currentKey);
+    return Array.from(monthSet).sort().reverse();
+  }, [financeData.transactions]);
+
+  // Monthly filtered transactions
+  const monthlyTransactions = useMemo(() => {
+    return financeData.transactions.filter((t) => {
+      const date = new Date(t.date);
+      return date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth;
+    });
+  }, [financeData.transactions, selectedYear, selectedMonth]);
+
+  const monthlyIncomeTransactions = useMemo(() =>
+    monthlyTransactions.filter((t) => t.type === "income"),
+    [monthlyTransactions]
+  );
+
+  const monthlyExpenseTransactions = useMemo(() =>
+    monthlyTransactions.filter((t) => t.type === "expense"),
+    [monthlyTransactions]
+  );
+
+  // Monthly totals
+  const totals = useMemo(() => {
+    const income = monthlyTransactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+    const expense = monthlyTransactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0);
+    return { income, expense, net: income - expense };
+  }, [monthlyTransactions]);
+
+  // Yearly totals
+  const yearlyTotals = useMemo(() => {
+    const yearlyTransactions = financeData.transactions.filter((t) => {
+      const date = new Date(t.date);
+      return date.getFullYear() === selectedYear;
+    });
+    const income = yearlyTransactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+    const expense = yearlyTransactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0);
+    return { income, expense, net: income - expense };
+  }, [financeData.transactions, selectedYear]);
+
+  // Account breakdown for pie charts
+  const incomeByAccount: AccountBreakdown[] = useMemo(() => {
+    const breakdown: AccountBreakdown[] = [];
+    const colors = ["#22c55e", "#16a34a", "#15803d", "#166534", "#14532d", "#10b981", "#059669"];
+
+    financeData.accounts
+      .filter((a) => a.type === "income")
+      .forEach((account, index) => {
+        const amount = monthlyTransactions
+          .filter((t) => t.type === "income" && t.accountId === account.id)
+          .reduce((sum, t) => sum + t.amount, 0);
+        if (amount > 0) {
+          breakdown.push({
+            name: account.name,
+            amount,
+            color: colors[index % colors.length],
+          });
+        }
+      });
+    return breakdown.sort((a, b) => b.amount - a.amount);
+  }, [financeData.accounts, monthlyTransactions]);
+
+  const expenseByAccount: AccountBreakdown[] = useMemo(() => {
+    const breakdown: AccountBreakdown[] = [];
+    const colors = ["#ef4444", "#dc2626", "#b91c1c", "#991b1b", "#7f1d1d", "#f97316", "#ea580c"];
+
+    financeData.accounts
+      .filter((a) => a.type === "expense")
+      .forEach((account, index) => {
+        const amount = monthlyTransactions
+          .filter((t) => t.type === "expense" && t.accountId === account.id)
+          .reduce((sum, t) => sum + t.amount, 0);
+        if (amount > 0) {
+          breakdown.push({
+            name: account.name,
+            amount,
+            color: colors[index % colors.length],
+          });
+        }
+      });
+    return breakdown.sort((a, b) => b.amount - a.amount);
+  }, [financeData.accounts, monthlyTransactions]);
+
+  // =============== Report Data ===============
+  const reportData: ReportData = useMemo(() => {
+    let filtered: Transaction[];
+
+    if (reportType === "monthly") {
+      filtered = financeData.transactions.filter((t) => {
+        const date = new Date(t.date);
+        return date.getFullYear() === reportYear && date.getMonth() + 1 === reportMonth;
+      });
+    } else {
+      filtered = financeData.transactions.filter((t) => {
+        const date = new Date(t.date);
+        return date.getFullYear() === reportYear;
+      });
+    }
+
+    filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const incomeByAccount: Record<string, number> = {};
+    const expenseByAccount: Record<string, number> = {};
+    const groupedTransactions = {
+      income: {} as Record<string, Transaction[]>,
+      expense: {} as Record<string, Transaction[]>,
+    };
+
+    filtered.forEach((t) => {
+      const account = financeData.accounts.find((a) => a.id === t.accountId);
+      if (!account) return;
+
+      if (t.type === "income") {
+        incomeByAccount[account.name] = (incomeByAccount[account.name] || 0) + t.amount;
+        if (!groupedTransactions.income[account.name]) groupedTransactions.income[account.name] = [];
+        groupedTransactions.income[account.name].push(t);
+      } else {
+        expenseByAccount[account.name] = (expenseByAccount[account.name] || 0) + t.amount;
+        if (!groupedTransactions.expense[account.name]) groupedTransactions.expense[account.name] = [];
+        groupedTransactions.expense[account.name].push(t);
+      }
+    });
+
+    const totalIncome = Object.values(incomeByAccount).reduce((a, b) => a + b, 0);
+    const totalExpense = Object.values(expenseByAccount).reduce((a, b) => a + b, 0);
+
+    return {
+      incomeByAccount,
+      expenseByAccount,
+      groupedTransactions,
+      totalIncome,
+      totalExpense,
+      netIncome: totalIncome - totalExpense,
+      transactionCount: filtered.length,
+    };
+  }, [financeData, reportType, reportYear, reportMonth]);
+
+  // =============== Helpers ===============
+  const formatCurrency = useCallback((amount: number, useLarge: boolean = false): string => {
+    if (useLarge) {
+      return formatLargeCurrency(amount);
+    }
+    return formatCurrencyUtil(amount, true);
+    // currencyCode is in deps to trigger re-render on currency change
+  }, [currencyCode]);
+
+  const formatDate = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("ko-KR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  };
+
+  // =============== Render Tab Content ===============
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "ledger":
+        return (
+          <LedgerView
+            ledgerData={ledgerData}
+            monthlyTransactions={monthlyTransactions}
+            monthlyIncomeTransactions={monthlyIncomeTransactions}
+            monthlyExpenseTransactions={monthlyExpenseTransactions}
+            incomeByAccount={incomeByAccount}
+            expenseByAccount={expenseByAccount}
+            totals={totals}
+            yearlyTotals={yearlyTotals}
+            selectedYear={selectedYear}
+            selectedMonth={selectedMonth}
+            detailView={detailView}
+            formatCurrency={formatCurrency}
+            setDetailView={setDetailView}
+            onAddAccount={() => {
+              setEditingAccount(null);
+              setShowAccountModal(true);
+            }}
+            onEditAccount={(account) => {
+              setEditingAccount(account);
+              setShowAccountModal(true);
+            }}
+            onDeleteAccount={(accountId) => {
+              setDeleteTarget({ type: "account", id: accountId });
+              setShowDeleteConfirm(true);
+            }}
+          />
+        );
+      case "income":
+        return (
+          <TransactionManagementView
+            type="income"
+            transactions={incomeTransactions}
+            accounts={financeData.accounts}
+            dateFilter={dateFilter}
+            searchTerm={searchTerm}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            onDateFilterChange={setDateFilter}
+            onSearchChange={setSearchTerm}
+            onAdd={() => {
+              setEditingTransaction({
+                id: "",
+                accountId: financeData.accounts.find(a => a.type === "income")?.id || "",
+                date: new Date().toISOString().split("T")[0],
+                description: "",
+                amount: 0,
+                type: "income",
+              });
+              setShowTransactionModal(true);
+            }}
+            onEdit={(txn) => {
+              setEditingTransaction(txn);
+              setShowTransactionModal(true);
+            }}
+            onDelete={(txnId) => {
+              setDeleteTarget({ type: "transaction", id: txnId });
+              setShowDeleteConfirm(true);
+            }}
+          />
+        );
+      case "expense":
+        return (
+          <TransactionManagementView
+            type="expense"
+            transactions={expenseTransactions}
+            accounts={financeData.accounts}
+            dateFilter={dateFilter}
+            searchTerm={searchTerm}
+            formatCurrency={formatCurrency}
+            formatDate={formatDate}
+            onDateFilterChange={setDateFilter}
+            onSearchChange={setSearchTerm}
+            onAdd={() => {
+              setEditingTransaction({
+                id: "",
+                accountId: financeData.accounts.find(a => a.type === "expense")?.id || "",
+                date: new Date().toISOString().split("T")[0],
+                description: "",
+                amount: 0,
+                type: "expense",
+              });
+              setShowTransactionModal(true);
+            }}
+            onEdit={(txn) => {
+              setEditingTransaction(txn);
+              setShowTransactionModal(true);
+            }}
+            onDelete={(txnId) => {
+              setDeleteTarget({ type: "transaction", id: txnId });
+              setShowDeleteConfirm(true);
+            }}
+          />
+        );
+      case "report":
+        return (
+          <ReportView
+            reportData={reportData}
+            reportType={reportType}
+            reportYear={reportYear}
+            reportMonth={reportMonth}
+            formatCurrency={formatCurrency}
+            onReportTypeChange={setReportType}
+            onYearChange={setReportYear}
+            onMonthChange={setReportMonth}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  // =============== Main Render ===============
+  if (isLoading) {
+    return (
+      <div className="finance-page loading">
+        <div className="loading-spinner">
+          <span className="material-symbols-outlined rotating">sync</span>
+          <p>데이터를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="finance-page">
-      {/* Sidebar - 간소화 */}
-      <aside className="finance-sidebar">
-        <div className="finance-sidebar__header">
-          <div className="finance-sidebar__logo" />
-          <div>
-            <h1 className="finance-sidebar__title">회계 관리</h1>
-            <p className="finance-sidebar__subtitle">재정 시스템</p>
-          </div>
-        </div>
-
-        <nav className="finance-nav">
-          <a className="finance-nav__item active" href="#">
-            <span className="material-symbols-outlined filled">
-              account_balance_wallet
-            </span>
-            <span>총계정원장</span>
-          </a>
-          <a className="finance-nav__item" href="#">
-            <span className="material-symbols-outlined">trending_up</span>
-            <span>수입 관리</span>
-          </a>
-          <a className="finance-nav__item" href="#">
-            <span className="material-symbols-outlined">trending_down</span>
-            <span>지출 관리</span>
-          </a>
-          <a className="finance-nav__item" href="#">
-            <span className="material-symbols-outlined">assessment</span>
-            <span>보고서</span>
-          </a>
-        </nav>
-
-        <div className="finance-sidebar__user">
-          <div
-            className="finance-sidebar__user-avatar"
-            style={{
-              background: "#4b5563",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ color: "white", fontSize: "1.25rem" }}
-            >
-              person
-            </span>
-          </div>
-          <div>
-            <p className="finance-sidebar__user-name">재정부</p>
-            <p className="finance-sidebar__user-role">관리자</p>
-          </div>
-        </div>
-      </aside>
+      {/* Sidebar */}
+      <FinanceSidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Main Content */}
       <main className="finance-content">
-        <header className="finance-header">
-          <h2 className="finance-header__title">총계정원장 및 재무 보고서</h2>
-          <div className="finance-header__actions">
-            <span className="finance-header__badge">{currentMonth} 결산</span>
-          </div>
-        </header>
+        <FinanceHeader
+          activeTab={activeTab}
+          currencyCode={currencyCode}
+          currencySymbol={currencySymbol}
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          showMonthSelector={showMonthSelector}
+          availableMonths={availableMonths}
+          onMonthSelectorToggle={() => setShowMonthSelector(!showMonthSelector)}
+          onMonthSelect={(year, month) => {
+            setSelectedYear(year);
+            setSelectedMonth(month);
+            setShowMonthSelector(false);
+          }}
+          onDetailViewReset={() => setDetailView("overview")}
+        />
 
         <div className="finance-main">
           <div className="finance-main__inner">
-            {/* Stats Grid */}
-            <div className="finance-stats">
-              {/* Left Stats */}
-              <div className="finance-stats__left">
-                <div className="stat-card">
-                  <div className="stat-card__decoration stat-card__decoration--green" />
-                  <div className="stat-card__header">
-                    <span className="stat-card__icon stat-card__icon--green">
-                      <span className="material-symbols-outlined">
-                        trending_up
-                      </span>
-                    </span>
-                    <span className="stat-card__label">총 수입</span>
-                  </div>
-                  <div className="stat-card__value-wrapper">
-                    <span className="stat-card__value">
-                      ₩ {formatCurrency(totals.income)}
-                    </span>
-                  </div>
-                  <p className="stat-card__note">
-                    {financeData.ledger.filter((l) => l.type === "income").length}개
-                    항목
-                  </p>
-                </div>
-
-                <div className="stat-card">
-                  <div className="stat-card__decoration stat-card__decoration--blue" />
-                  <div className="stat-card__header">
-                    <span className="stat-card__icon stat-card__icon--blue">
-                      <span className="material-symbols-outlined">
-                        trending_down
-                      </span>
-                    </span>
-                    <span className="stat-card__label">총 지출</span>
-                  </div>
-                  <div className="stat-card__value-wrapper">
-                    <span className="stat-card__value">
-                      ₩ {formatCurrency(totals.expense)}
-                    </span>
-                  </div>
-                  <p className="stat-card__note">
-                    {financeData.ledger.filter((l) => l.type === "expense").length}개
-                    항목
-                  </p>
-                </div>
-
-                <div className="budget-card">
-                  <div className="budget-card__decoration">
-                    <span className="material-symbols-outlined">
-                      account_balance
-                    </span>
-                  </div>
-                  <span className="budget-card__label">순이익</span>
-                  <span className="budget-card__value">
-                    ₩ {formatCurrency(totals.income - totals.expense)}
-                  </span>
-                  <span className="budget-card__note">수입 - 지출</span>
-                </div>
-              </div>
-
-              {/* Right - Empty State or Chart */}
-              <div className="finance-stats__right">
-                <div className="finance-chart-card">
-                  <div className="finance-chart-card__header">
-                    <div>
-                      <h3 className="finance-chart-card__title">
-                        재정 현황
-                      </h3>
-                      <p className="finance-chart-card__subtitle">
-                        {financeData.lastUpdated
-                          ? `마지막 업데이트: ${financeData.lastUpdated}`
-                          : "데이터가 없습니다."}
-                      </p>
-                    </div>
-                  </div>
-                  {financeData.ledger.length === 0 && (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        padding: "3rem",
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{
-                          fontSize: "3rem",
-                          marginBottom: "1rem",
-                          display: "block",
-                        }}
-                      >
-                        account_balance_wallet
-                      </span>
-                      <p>등록된 재정 데이터가 없습니다.</p>
-                      <p style={{ fontSize: "0.875rem", marginTop: "0.5rem" }}>
-                        아래에서 새 계정을 추가해주세요.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Ledger Table */}
-            <section className="ledger-section">
-              <div className="ledger-header">
-                <div>
-                  <h2 className="ledger-header__title">
-                    총계정원장 (General Ledger)
-                  </h2>
-                  <p className="ledger-header__subtitle">
-                    지정된 기간 동안의 모든 계정 잔액 및 상세 내역을 조회합니다.
-                  </p>
-                </div>
-                <div className="ledger-header__controls">
-                  <button className="ledger-export-btn">
-                    <span className="material-symbols-outlined">add</span>
-                    새 계정 추가
-                  </button>
-                </div>
-              </div>
-
-              <div className="ledger-table-wrapper">
-                {financeData.ledger.length > 0 ? (
-                  <table className="ledger-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: "6rem" }}>계정코드</th>
-                        <th style={{ minWidth: "12.5rem" }}>
-                          계정명 (Account Name)
-                        </th>
-                        <th className="text-right bg-highlight">기초잔액</th>
-                        <th className="text-right text-income">수입(차변)</th>
-                        <th className="text-right text-expense">지출(대변)</th>
-                        <th className="text-right bg-highlight">기말잔액</th>
-                        <th className="text-center" style={{ width: "6rem" }}>
-                          상세보기
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {financeData.ledger.map((row) => (
-                        <tr key={row.id}>
-                          <td className="code">{row.code}</td>
-                          <td>
-                            <div className="account-cell">
-                              <div className="account-cell__name">
-                                <div
-                                  className={`account-cell__dot ${getDotClass(
-                                    row.type
-                                  )}`}
-                                />
-                                <span className="account-cell__title">
-                                  {row.name}
-                                </span>
-                              </div>
-                              {row.subName && (
-                                <span className="account-cell__sub">
-                                  {row.subName}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="text-right bg-highlight">
-                            {formatCurrency(row.opening)}
-                          </td>
-                          <td className="text-right income">
-                            {formatCurrency(row.income)}
-                          </td>
-                          <td className="text-right expense">
-                            {formatCurrency(row.expense)}
-                          </td>
-                          <td className="text-right bg-highlight balance">
-                            {formatCurrency(
-                              row.opening + row.income - row.expense
-                            )}
-                          </td>
-                          <td className="text-center">
-                            <button className="view-detail-btn">
-                              <span className="material-symbols-outlined">
-                                visibility
-                              </span>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td colSpan={3} className="total-label">
-                          합계 (Totals):
-                        </td>
-                        <td className="total-income">
-                          ₩ {formatCurrency(totals.income)}
-                        </td>
-                        <td className="total-expense">
-                          ₩ {formatCurrency(totals.expense)}
-                        </td>
-                        <td></td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                ) : (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "3rem",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{
-                        fontSize: "3rem",
-                        marginBottom: "1rem",
-                        display: "block",
-                      }}
-                    >
-                      receipt_long
-                    </span>
-                    <p>등록된 계정이 없습니다.</p>
-                    <p style={{ fontSize: "0.875rem", marginTop: "0.5rem" }}>
-                      "새 계정 추가" 버튼을 클릭하여 계정을 등록해주세요.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="ledger-footer">
-                <span className="ledger-footer__info">
-                  총 {financeData.ledger.length}개의 계정
-                </span>
-              </div>
-            </section>
+            {renderTabContent()}
           </div>
         </div>
       </main>
+
+      {/* Account Modal */}
+      {showAccountModal && (
+        <div className="settings-modal-overlay" onClick={() => setShowAccountModal(false)}>
+          <div className="settings-modal settings-modal--lg" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-modal__header">
+              <h3 className="settings-modal__title">{editingAccount?.id ? "계정 수정" : "새 계정 추가"}</h3>
+              <button className="icon-btn" onClick={() => setShowAccountModal(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="settings-modal__body">
+              <AccountForm
+                account={editingAccount}
+                accounts={financeData.accounts}
+                onSave={handleSaveAccount}
+                onCancel={() => {
+                  setShowAccountModal(false);
+                  setEditingAccount(null);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction Modal */}
+      {showTransactionModal && (
+        <div className="modal-overlay" onClick={() => setShowTransactionModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>
+                {editingTransaction?.id ? "거래 수정" :
+                  editingTransaction?.type === "income" ? "수입 추가" : "지출 추가"}
+              </h3>
+              <button className="modal-close" onClick={() => setShowTransactionModal(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <TransactionForm
+              transaction={editingTransaction}
+              accounts={financeData.accounts}
+              onSave={handleSaveTransaction}
+              onCancel={() => {
+                setShowTransactionModal(false);
+                setEditingTransaction(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      <DeleteConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => {
+          setShowDeleteConfirm(false);
+          setDeleteTarget(null);
+        }}
+        onConfirm={() => {
+          if (deleteTarget?.type === "account") {
+            handleDeleteAccount();
+          } else {
+            handleDeleteTransaction();
+          }
+        }}
+        message={
+          deleteTarget?.type === "account"
+            ? "이 계정을 삭제하시겠습니까? 관련된 모든 거래 내역도 함께 삭제됩니다."
+            : "이 거래 내역을 삭제하시겠습니까?"
+        }
+      />
     </div>
   );
 }

@@ -111,9 +111,9 @@ function MemberRegistration() {
             "성도": "new", "서리집사": "member", "안수집사": "deacon",
             "권사": "elder_woman", "장로": "elder", "목사": "pastor"
           };
-          const positionCode = Object.keys(roleMap).find(key => roleMap[key] === member.role)
-            ? Object.entries(roleMap).find(([k, v]) => k === member.role)?.[1] || "new"
-            : "new";
+          // Find positionCode by matching member.role to roleMap values
+          const matchedEntry = Object.entries(roleMap).find(([key]) => key === member.role);
+          const positionCode = matchedEntry ? matchedEntry[1] : "new";
 
           setFormData({
             name: member.name,

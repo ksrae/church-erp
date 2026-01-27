@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
+import {
+  currencies,
+  CurrencyCode,
+  getCurrentCurrencyCode,
+  setCurrencyCode,
+} from "../utils/currency";
+import { loadData, saveData } from "../utils/fileStorage";
 
 const SETTINGS_STORAGE_KEY = "church_erp_settings";
-const DATA_STORAGE_PREFIX = "church_erp_";
 
 interface ChurchSettings {
   churchName: string;
@@ -16,8 +22,24 @@ interface SettingsData {
   church: ChurchSettings;
   theme: "light" | "dark" | "system";
   language: "ko" | "en";
+  currency: CurrencyCode;
   autoBackup: boolean;
   backupInterval: "daily" | "weekly" | "monthly";
+}
+
+interface Account {
+  id: string;
+  code: string;
+  name: string;
+  subName: string;
+  type: "asset" | "income" | "expense";
+  description?: string;
+}
+
+interface FinanceData {
+  accounts: Account[];
+  transactions: any[];
+  budgets: any[];
 }
 
 const defaultSettings: SettingsData = {
@@ -31,16 +53,223 @@ const defaultSettings: SettingsData = {
   },
   theme: "light",
   language: "ko",
+  currency: "KRW" as CurrencyCode,
   autoBackup: true,
   backupInterval: "weekly",
 };
 
 function Settings() {
   const [settings, setSettings] = useState<SettingsData>(defaultSettings);
-  const [activeTab, setActiveTab] = useState<"church" | "system" | "data" | "about">("church");
+  const [activeTab, setActiveTab] = useState<"church" | "system" | "data" | "about" | "accounts">("church");
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // Accounts State
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [currentAccount, setCurrentAccount] = useState<Partial<Account>>({ type: "income" });
+  const [isEditingAccount, setIsEditingAccount] = useState(false);
+
+  // Load Accounts when tab is active
+  useEffect(() => {
+    if (activeTab === "accounts") {
+      const fetchAccounts = async () => {
+        const data = await loadData<FinanceData>("finance", "finance.json");
+        if (data && data.accounts) {
+          setAccounts(data.accounts);
+        }
+      };
+      fetchAccounts();
+    }
+  }, [activeTab]);
+
+  const handleSaveAccount = async () => {
+    if (!currentAccount.name || !currentAccount.type) {
+      setSaveMessage("필수 정보를 입력해주세요.");
+      return;
+    }
+
+    try {
+      const data = await loadData<FinanceData>("finance", "finance.json") || { accounts: [], transactions: [], budgets: [] };
+      let newAccounts = [...(data.accounts || [])];
+
+      if (isEditingAccount && currentAccount.id) {
+        newAccounts = newAccounts.map(acc =>
+          acc.id === currentAccount.id ? { ...acc, ...currentAccount } as Account : acc
+        );
+      } else {
+        const newId = crypto.randomUUID();
+        const newAccount = {
+          ...currentAccount,
+          id: newId,
+          code: currentAccount.code || "0000",
+          subName: currentAccount.subName || ""
+        } as Account;
+        newAccounts.push(newAccount);
+      }
+
+      data.accounts = newAccounts;
+      await saveData("finance", data, "finance.json");
+
+      setAccounts(newAccounts);
+      setShowAccountModal(false);
+      setSaveMessage("계정이 저장되었습니다.");
+      setTimeout(() => setSaveMessage(""), 3000);
+    } catch (e) {
+      console.error(e);
+      setSaveMessage("저장 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleDeleteAccount = async (id: string) => {
+    if (!confirm("정말 이 계정을 삭제하시겠습니까? 거래 내역이 존재할 경우 문제가 발생할 수 있습니다.")) return;
+
+    try {
+      const data = await loadData<FinanceData>("finance", "finance.json") || { accounts: [], transactions: [], budgets: [] };
+      const newAccounts = (data.accounts || []).filter(acc => acc.id !== id);
+
+      data.accounts = newAccounts;
+      await saveData("finance", data, "finance.json");
+
+      setAccounts(newAccounts);
+      setSaveMessage("계정이 삭제되었습니다.");
+      setTimeout(() => setSaveMessage(""), 3000);
+    } catch (e) {
+      console.error(e);
+      setSaveMessage("삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 데이터 백업 (JSON 파일 다운로드) - File Storage 기반
+  const handleBackup = async () => {
+    try {
+      const backupData: Record<string, any> = {};
+
+      // Finance Data
+      const financeData = await loadData("finance", "finance.json");
+      if (financeData) backupData.finance = financeData;
+
+      // 추가 데이터 타입이 있다면 여기서 로드
+      // const membersData = await loadData("members", "members.json");
+      // if (membersData) backupData.members = membersData;
+
+      const dataStr = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `church_erp_backup_${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setSaveMessage("백업 파일이 다운로드되었습니다.");
+      setTimeout(() => setSaveMessage(""), 3000);
+    } catch (e) {
+      console.error(e);
+      setSaveMessage("백업 생성 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 데이터 복원 - File Storage 기반
+  const handleRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+
+        if (data.finance) {
+          await saveData("finance", data.finance, "finance.json");
+        }
+
+        // 다른 데이터 복원 로직 추가 가능
+
+        // 계정 목록 새로고침
+        if (activeTab === "accounts") {
+          const loaded = await loadData<FinanceData>("finance", "finance.json");
+          if (loaded?.accounts) setAccounts(loaded.accounts);
+        }
+
+        setSaveMessage("데이터가 성공적으로 복원되었습니다.");
+        setTimeout(() => setSaveMessage(""), 3000);
+      } catch (e) {
+        console.error(e);
+        setSaveMessage("파일 형식이 올바르지 않거나 복원 중 오류가 발생했습니다.");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  };
+
+  // 시스템 초기화 - File Storage 기반
+  const handleReset = async () => {
+    try {
+      // Finance 초기화
+      await saveData("finance", { accounts: [], transactions: [], budgets: [] }, "finance.json");
+
+      // 설정 초기화
+      setSettings(defaultSettings);
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(defaultSettings));
+
+      setAccounts([]);
+      setShowResetConfirm(false);
+      setSaveMessage("모든 데이터가 초기화되었습니다.");
+      setTimeout(() => setSaveMessage(""), 3000);
+    } catch (e) {
+      console.error(e);
+      setSaveMessage("초기화 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 다음 계정 코드 자동 생성
+  const getNextAccountCode = (type: Account["type"], currentAccounts: Account[]) => {
+    let rangeStart = 1000;
+    if (type === "income") rangeStart = 4000;
+    if (type === "expense") rangeStart = 5000;
+    const rangeEnd = rangeStart + 999;
+
+    const relevant = currentAccounts.filter(acc => {
+      const code = parseInt(acc.code);
+      return !isNaN(code) && code >= rangeStart && code <= rangeEnd;
+    });
+
+    if (relevant.length === 0) return rangeStart.toString();
+
+    // 100단위 증가
+    const maxCode = Math.max(...relevant.map(acc => parseInt(acc.code)));
+    return (maxCode + 100).toString();
+  };
+
+  const openAddAccountModal = () => {
+    const initialType: Account["type"] = "income";
+    const nextCode = getNextAccountCode(initialType, accounts);
+    setCurrentAccount({ type: initialType, code: nextCode, name: "", subName: "", description: "" });
+    setIsEditingAccount(false);
+    setShowAccountModal(true);
+  };
+
+  const openEditAccountModal = (account: Account) => {
+    setCurrentAccount({ ...account });
+    setIsEditingAccount(true);
+    setShowAccountModal(true);
+  };
+
+
+  // 계정 타입 변경 시 코드 자동 업데이트 (추가 모드일 때만)
+  useEffect(() => {
+    if (!isEditingAccount && showAccountModal) {
+      const nextCode = getNextAccountCode(currentAccount.type || "income", accounts);
+      setCurrentAccount(prev => {
+        if (prev.code === nextCode) return prev;
+        return { ...prev, code: nextCode };
+      });
+    }
+  }, [currentAccount.type, isEditingAccount, showAccountModal, accounts]);
 
   // 설정 불러오기
   useEffect(() => {
@@ -53,6 +282,9 @@ function Settings() {
         // 파싱 에러 시 기본값 사용
       }
     }
+    // Load current currency setting
+    const currentCurrency = getCurrentCurrencyCode();
+    setSettings(prev => ({ ...prev, currency: currentCurrency }));
   }, []);
 
   // 설정 저장
@@ -79,93 +311,12 @@ function Settings() {
     }));
   };
 
-  // 데이터 백업 (JSON 파일 다운로드)
-  const handleBackup = () => {
-    const allData: Record<string, unknown> = {};
 
-    // localStorage에서 church_erp_ 로 시작하는 모든 데이터 수집
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(DATA_STORAGE_PREFIX)) {
-        try {
-          allData[key] = JSON.parse(localStorage.getItem(key) || "");
-        } catch {
-          allData[key] = localStorage.getItem(key);
-        }
-      }
-    }
-
-    const dataStr = JSON.stringify(allData, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `church_erp_backup_${new Date().toISOString().split("T")[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    setSaveMessage("백업 파일이 다운로드되었습니다.");
-    setTimeout(() => setSaveMessage(""), 3000);
-  };
-
-  // 데이터 복원
-  const handleRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string);
-
-        // 모든 데이터 복원
-        Object.entries(data).forEach(([key, value]) => {
-          localStorage.setItem(key, typeof value === "string" ? value : JSON.stringify(value));
-        });
-
-        // 설정 다시 불러오기
-        const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
-        if (savedSettings) {
-          setSettings({ ...defaultSettings, ...JSON.parse(savedSettings) });
-        }
-
-        setSaveMessage("데이터가 성공적으로 복원되었습니다.");
-        setTimeout(() => setSaveMessage(""), 3000);
-      } catch {
-        setSaveMessage("파일 형식이 올바르지 않습니다.");
-        setTimeout(() => setSaveMessage(""), 3000);
-      }
-    };
-    reader.readAsText(file);
-
-    // 파일 입력 초기화
-    event.target.value = "";
-  };
-
-  // 시스템 초기화
-  const handleReset = () => {
-    // church_erp_ 로 시작하는 모든 데이터 삭제
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(DATA_STORAGE_PREFIX)) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach((key) => localStorage.removeItem(key));
-
-    // 설정 초기화
-    setSettings(defaultSettings);
-    setShowResetConfirm(false);
-    setSaveMessage("모든 데이터가 초기화되었습니다.");
-    setTimeout(() => setSaveMessage(""), 3000);
-  };
 
   const tabs = [
     { id: "church" as const, icon: "church", label: "교회 정보" },
     { id: "system" as const, icon: "tune", label: "시스템 설정" },
+    { id: "accounts" as const, icon: "category", label: "계정 관리" },
     { id: "data" as const, icon: "storage", label: "데이터 관리" },
     { id: "about" as const, icon: "info", label: "앱 정보" },
   ];
@@ -310,19 +461,6 @@ function Settings() {
 
               <div className="settings-form">
                 <div className="settings-form__group">
-                  <label className="settings-form__label">테마</label>
-                  <select
-                    className="settings-form__select"
-                    value={settings.theme}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, theme: e.target.value as SettingsData["theme"] }))}
-                  >
-                    <option value="light">라이트 모드</option>
-                    <option value="dark">다크 모드</option>
-                    <option value="system">시스템 설정에 따름</option>
-                  </select>
-                </div>
-
-                <div className="settings-form__group">
                   <label className="settings-form__label">언어</label>
                   <select
                     className="settings-form__select"
@@ -330,8 +468,29 @@ function Settings() {
                     onChange={(e) => setSettings((prev) => ({ ...prev, language: e.target.value as SettingsData["language"] }))}
                   >
                     <option value="ko">한국어</option>
-                    <option value="en">English</option>
                   </select>
+                </div>
+
+                <div className="settings-form__group">
+                  <label className="settings-form__label">통화</label>
+                  <select
+                    className="settings-form__select"
+                    value={settings.currency}
+                    onChange={(e) => {
+                      const newCurrency = e.target.value as CurrencyCode;
+                      setSettings((prev) => ({ ...prev, currency: newCurrency }));
+                      setCurrencyCode(newCurrency);
+                    }}
+                  >
+                    {Object.values(currencies).map((currency) => (
+                      <option key={currency.code} value={currency.code}>
+                        {currency.symbol} {currency.name} ({currency.code})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="settings-form__hint">
+                    금액 표시에 사용되는 통화를 선택합니다. 변경 시 모든 금액 표시에 즉시 적용됩니다.
+                  </p>
                 </div>
 
                 <div className="settings-form__group settings-form__group--full">
@@ -340,15 +499,17 @@ function Settings() {
                     <label className="settings-toggle__switch">
                       <input
                         type="checkbox"
-                        checked={settings.autoBackup}
-                        onChange={(e) => setSettings((prev) => ({ ...prev, autoBackup: e.target.checked }))}
+                        checked={false}
+                        disabled
+                        onChange={() => { }}
                       />
                       <span className="settings-toggle__slider"></span>
                     </label>
                     <span className="settings-toggle__text">
-                      {settings.autoBackup ? "활성화됨" : "비활성화됨"}
+                      {settings.autoBackup ? "활성화됨 (준비중)" : "비활성화됨 (파일 관리 사용)"}
                     </span>
                   </div>
+                  <p className="settings-form__hint">자동 백업 기능은 현재 지원되지 않습니다. 데이터 관리 탭에서 수동 백업을 이용해주세요.</p>
                 </div>
 
                 {settings.autoBackup && (
@@ -372,6 +533,73 @@ function Settings() {
                   <span className="material-symbols-outlined">save</span>
                   {isSaving ? "저장 중..." : "저장하기"}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Account Management Tab */}
+          {activeTab === "accounts" && (
+            <div className="settings-section">
+              <div className="settings-section__header-row">
+                <div>
+                  <h2 className="settings-section__title">
+                    <span className="material-symbols-outlined">category</span>
+                    계정 관리
+                  </h2>
+                  <p className="settings-section__description">
+                    수입 및 지출 항목으로 사용할 계정을 관리합니다.
+                  </p>
+                </div>
+                <button className="settings-btn settings-btn--primary" onClick={openAddAccountModal}>
+                  <span className="material-symbols-outlined">add</span>
+                  계정 추가
+                </button>
+              </div>
+
+              <div className="settings-table-container">
+                <table className="settings-table">
+                  <thead>
+                    <tr>
+                      <th>구분</th>
+                      <th>이름</th>
+                      <th>설명</th>
+                      <th style={{ width: "100px" }}>관리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accounts.map((account) => (
+                      <tr key={account.id}>
+                        <td>
+                          <span className={`badge badge--${account.type}`}>
+                            {account.type === "income" ? "수입" : account.type === "expense" ? "지출" : "자산"}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="account-name">
+                            <span className="main">{account.name}</span>
+                            {account.subName && <span className="sub">({account.subName})</span>}
+                          </div>
+                        </td>
+                        <td className="text-secondary">{account.description || "-"}</td>
+                        <td>
+                          <div className="action-buttons">
+                            <button className="icon-btn" onClick={() => openEditAccountModal(account)}>
+                              <span className="material-symbols-outlined">edit</span>
+                            </button>
+                            <button className="icon-btn" onClick={() => handleDeleteAccount(account.id)}>
+                              <span className="material-symbols-outlined">delete</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {accounts.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="text-center py-4">등록된 계정이 없습니다.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -490,7 +718,7 @@ function Settings() {
                   </div>
                   <div className="settings-about__info-item">
                     <span className="settings-about__info-label">데이터 저장</span>
-                    <span className="settings-about__info-value">로컬 스토리지 (서버 없음)</span>
+                    <span className="settings-about__info-value">파일 관리</span>
                   </div>
                 </div>
 
@@ -527,6 +755,100 @@ function Settings() {
                 <span className="material-symbols-outlined">delete_forever</span>
                 초기화 실행
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Account Modal */}
+      {showAccountModal && (
+        <div className="settings-modal-overlay" onClick={() => setShowAccountModal(false)}>
+          <div className="settings-modal settings-modal--lg" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-modal__header">
+              <h3 className="settings-modal__title">
+                {isEditingAccount ? "계정 수정" : "계정 추가"}
+              </h3>
+              <button className="icon-btn" onClick={() => setShowAccountModal(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="settings-modal__body">
+              <div className="settings-form">
+                {/* Type Selection */}
+                <div className="settings-form__group">
+                  <label className="settings-form__label">계정 구분</label>
+                  <div className="account-type-selector">
+                    <label className={`type-option ${currentAccount.type === "income" ? "active income" : ""}`}>
+                      <input
+                        type="radio"
+                        name="accountType"
+                        checked={currentAccount.type === "income"}
+                        onChange={() => setCurrentAccount(prev => ({ ...prev, type: "income" }))}
+                      />
+                      <span>수입</span>
+                    </label>
+                    <label className={`type-option ${currentAccount.type === "expense" ? "active expense" : ""}`}>
+                      <input
+                        type="radio"
+                        name="accountType"
+                        checked={currentAccount.type === "expense"}
+                        onChange={() => setCurrentAccount(prev => ({ ...prev, type: "expense" }))}
+                      />
+                      <span>지출</span>
+                    </label>
+                    <label className={`type-option ${currentAccount.type === "asset" ? "active asset" : ""}`}>
+                      <input
+                        type="radio"
+                        name="accountType"
+                        checked={currentAccount.type === "asset"}
+                        onChange={() => setCurrentAccount(prev => ({ ...prev, type: "asset" }))}
+                      />
+                      <span>자산</span>
+                    </label>
+                  </div>
+                </div>
+
+
+                {/* Name */}
+                <div className="settings-form__group">
+                  <label className="settings-form__label">계정 이름 <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    className="settings-form__input"
+                    placeholder="예: 십일조헌금"
+                    value={currentAccount.name || ""}
+                    onChange={(e) => setCurrentAccount(prev => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+
+                {/* SubName & Description */}
+                <div className="settings-form__group">
+                  <label className="settings-form__label">보조 이름 (선택)</label>
+                  <input
+                    type="text"
+                    className="settings-form__input"
+                    placeholder="예: 1부예배"
+                    value={currentAccount.subName || ""}
+                    onChange={(e) => setCurrentAccount(prev => ({ ...prev, subName: e.target.value }))}
+                  />
+                </div>
+                <div className="settings-form__group">
+                  <label className="settings-form__label">설명 (선택)</label>
+                  <input
+                    type="text"
+                    className="settings-form__input"
+                    placeholder="계정에 대한 설명을 입력하세요"
+                    value={currentAccount.description || ""}
+                    onChange={(e) => setCurrentAccount(prev => ({ ...prev, description: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-modal__footer">
+              <button className="settings-btn settings-btn--outline" onClick={() => setShowAccountModal(false)}>취소</button>
+              <button className="settings-btn settings-btn--primary" onClick={handleSaveAccount}>저장</button>
             </div>
           </div>
         </div>
