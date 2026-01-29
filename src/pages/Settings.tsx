@@ -859,7 +859,7 @@ function Settings() {
                   <span className="material-symbols-outlined">church</span>
                 </div>
                 <h3 className="settings-about__name">Church ERP</h3>
-                <p className="settings-about__version">버전 0.2.0</p>
+                <p className="settings-about__version">버전 0.2.1</p>
                 <p className="settings-about__description">
                   교회 관리를 위한 통합 ERP 시스템입니다.
                   <br />
