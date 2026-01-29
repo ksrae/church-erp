@@ -1,5 +1,7 @@
+
 import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
+import { logActivity } from "../utils/auditLog";
 import {
   currencies,
   CurrencyCode,
@@ -9,6 +11,7 @@ import {
 import { loadData, saveData } from "../utils/fileStorage";
 import AdminManagement from "../components/settings/AdminManagement";
 import { LayoutOutletContext } from "../components/Layout";
+import { MemberSelect } from "../components/common/MemberSelect";
 
 const SETTINGS_STORAGE_KEY = "church_erp_settings";
 
@@ -19,6 +22,14 @@ interface ChurchSettings {
   phone: string;
   email: string;
   foundedYear: string;
+  logo?: string;
+}
+
+interface Member {
+  id: string;
+  name: string;
+  role?: string;
+  profileImage?: string;
 }
 
 interface SettingsData {
@@ -53,6 +64,7 @@ const defaultSettings: SettingsData = {
     phone: "",
     email: "",
     foundedYear: "",
+    logo: "", // Base64 encoded image
   },
   theme: "light",
   language: "ko",
@@ -67,6 +79,28 @@ function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // Pastor Dropdown State (Removed)
+  const [members, setMembers] = useState<Member[]>([]);
+
+  // Removed handleClickOutside effect
+
+  // Load Members for Dropdown
+  useEffect(() => {
+    const fetchMembers = async () => {
+      const data = await loadData<Member[]>("members");
+      if (data) {
+        setMembers(data);
+      } else {
+        // Fallback to local storage if needed, similar to Members page
+        const savedMembers = localStorage.getItem("church_erp_members");
+        if (savedMembers) {
+          setMembers(JSON.parse(savedMembers));
+        }
+      }
+    };
+    fetchMembers();
+  }, []);
 
   // Current user from Layout context
   const { currentUser } = useOutletContext<LayoutOutletContext>();
@@ -283,7 +317,16 @@ function Settings() {
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings);
-        setSettings({ ...defaultSettings, ...parsed });
+        // Deep merge for church settings to preserve new fields (like logo)
+        // if they don't exist in saved data
+        setSettings(prev => ({
+          ...prev,
+          ...parsed,
+          church: {
+            ...prev.church,
+            ...(parsed.church || {})
+          }
+        }));
       } catch {
         // 파싱 에러 시 기본값 사용
       }
@@ -294,16 +337,52 @@ function Settings() {
   }, []);
 
   // 설정 저장
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
     try {
+      // 로컬 스토리지에 저장
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+
+      // Log activity
+      await logActivity(
+        "SETTINGS",
+        "교회 정보 수정",
+        "설정 페이지에서 정보가 수정되었습니다."
+      );
+
       setSaveMessage("설정이 저장되었습니다.");
       setTimeout(() => setSaveMessage(""), 3000);
-    } catch {
+    } catch (error) {
+      console.error("Failed to save settings:", error);
       setSaveMessage("저장 중 오류가 발생했습니다.");
+    } finally {
+      setIsSaving(false);
     }
-    setIsSaving(false);
+  };
+
+  // 로고 이미지 업로드 처리
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 이미지 파일 검증
+    if (!file.type.startsWith("image/")) {
+      alert("이미지 파일만 업로드 가능합니다.");
+      return;
+    }
+
+    // 5MB 용량 제한
+    if (file.size > 5 * 1024 * 1024) {
+      alert("이미지 크기는 5MB 이하여야 합니다.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      handleChurchChange("logo", base64);
+    };
+    reader.readAsDataURL(file);
   };
 
   // 교회 정보 변경
@@ -379,25 +458,121 @@ function Settings() {
               </p>
 
               <div className="settings-form">
-                <div className="settings-form__group">
-                  <label className="settings-form__label">교회 이름</label>
-                  <input
-                    type="text"
-                    className="settings-form__input"
-                    placeholder="예: 은혜의교회"
-                    value={settings.church.churchName}
-                    onChange={(e) => handleChurchChange("churchName", e.target.value)}
-                  />
+                <div className="settings-form__group settings-form__group--full">
+                  <label className="settings-form__label">교회 로고</label>
+                  <div className="logo-upload-container" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <div className="logo-preview" style={{
+                      width: '80px',
+                      height: '80px',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'var(--bg-secondary)',
+                      overflow: 'hidden'
+                    }}>
+                      {settings.church.logo ? (
+                        <img src={settings.church.logo} alt="Church Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      ) : (
+                        <span className="material-symbols-outlined" style={{ fontSize: '2rem', color: 'var(--text-tertiary)' }}>church</span>
+                      )}
+                    </div>
+                    <div className="logo-actions">
+                      <label className="btn-secondary" style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.4rem 0.8rem',
+                        borderRadius: '0.375rem',
+                        cursor: 'pointer',
+                        border: '1px solid var(--border)',
+                        background: 'var(--bg-primary)'
+                      }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '1.2rem' }}>upload</span>
+                        로고 파일 선택
+                        <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: "none" }} />
+                      </label>
+                      {settings.church.logo && (
+                        <button
+                          className="btn-danger"
+                          onClick={() => handleChurchChange("logo", "")}
+                          style={{
+                            marginLeft: "0.5rem",
+                            padding: "0.4rem 0.8rem",
+                            border: '1px solid #fee2e2',
+                            background: '#fef2f2',
+                            color: '#ef4444',
+                            borderRadius: '0.375rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          삭제
+                        </button>
+                      )}
+                      <p className="settings-form__hint" style={{ marginTop: "0.5rem", fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        앱 상단 및 각종 보고서에 표시됩니다. (투명 배경 PNG 권장)
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="settings-form__group">
-                  <label className="settings-form__label">담임목사 성함</label>
+                <div className="settings-form__row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', gridColumn: 'span 2' }}>
+                  <div className="settings-form__group">
+                    <label className="settings-form__label">교회 이름</label>
+                    <input
+                      type="text"
+                      className="settings-form__input"
+                      placeholder="예: 은혜의교회"
+                      value={settings.church.churchName}
+                      onChange={(e) => handleChurchChange("churchName", e.target.value)}
+                    />
+                  </div>
+                  <div className="settings-form__group">
+                    <label className="settings-form__label">담임목사 성함</label>
+                    <div className="input-group">
+                      <MemberSelect
+                        value={settings.church.pastorName}
+                        onChange={(val: string) => handleChurchChange("pastorName", val)}
+                        members={members}
+                        roleFilter="목사"
+                        placeholder="예: 김은혜 (검색하여 선택)"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="settings-form__row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', gridColumn: 'span 2' }}>
+                  <div className="settings-form__group">
+                    <label className="settings-form__label">이메일</label>
+                    <input
+                      type="email"
+                      className="settings-form__input"
+                      placeholder="예: info@church.com"
+                      value={settings.church.email}
+                      onChange={(e) => handleChurchChange("email", e.target.value)}
+                    />
+                  </div>
+                  <div className="settings-form__group">
+                    <label className="settings-form__label">설립연도</label>
+                    <input
+                      type="text"
+                      className="settings-form__input"
+                      placeholder="예: 1990"
+                      value={settings.church.foundedYear}
+                      onChange={(e) => handleChurchChange("foundedYear", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="settings-form__group settings-form__group--full">
+                  <label className="settings-form__label">연락처</label>
                   <input
-                    type="text"
+                    type="tel"
                     className="settings-form__input"
-                    placeholder="예: 김은혜"
-                    value={settings.church.pastorName}
-                    onChange={(e) => handleChurchChange("pastorName", e.target.value)}
+                    placeholder="예: 02-1234-5678"
+                    value={settings.church.phone}
+                    onChange={(e) => handleChurchChange("phone", e.target.value)}
                   />
                 </div>
 
@@ -412,38 +587,7 @@ function Settings() {
                   />
                 </div>
 
-                <div className="settings-form__group">
-                  <label className="settings-form__label">연락처</label>
-                  <input
-                    type="tel"
-                    className="settings-form__input"
-                    placeholder="예: 02-1234-5678"
-                    value={settings.church.phone}
-                    onChange={(e) => handleChurchChange("phone", e.target.value)}
-                  />
-                </div>
 
-                <div className="settings-form__group">
-                  <label className="settings-form__label">이메일</label>
-                  <input
-                    type="email"
-                    className="settings-form__input"
-                    placeholder="예: info@church.com"
-                    value={settings.church.email}
-                    onChange={(e) => handleChurchChange("email", e.target.value)}
-                  />
-                </div>
-
-                <div className="settings-form__group">
-                  <label className="settings-form__label">설립연도</label>
-                  <input
-                    type="text"
-                    className="settings-form__input"
-                    placeholder="예: 1990"
-                    value={settings.church.foundedYear}
-                    onChange={(e) => handleChurchChange("foundedYear", e.target.value)}
-                  />
-                </div>
               </div>
 
               <div className="settings-actions">
@@ -591,7 +735,7 @@ function Settings() {
                     {accounts.map((account) => (
                       <tr key={account.id}>
                         <td>
-                          <span className={`badge badge--${account.type}`}>
+                          <span className={`badge badge--${account.type} `}>
                             {account.type === "income" ? "수입" : account.type === "expense" ? "지출" : "자산"}
                           </span>
                         </td>
@@ -715,7 +859,7 @@ function Settings() {
                   <span className="material-symbols-outlined">church</span>
                 </div>
                 <h3 className="settings-about__name">Church ERP</h3>
-                <p className="settings-about__version">버전 0.1.0</p>
+                <p className="settings-about__version">버전 0.2.0</p>
                 <p className="settings-about__description">
                   교회 관리를 위한 통합 ERP 시스템입니다.
                   <br />
@@ -800,7 +944,7 @@ function Settings() {
                 <div className="settings-form__group">
                   <label className="settings-form__label">계정 구분</label>
                   <div className="account-type-selector">
-                    <label className={`type-option ${currentAccount.type === "income" ? "active income" : ""}`}>
+                    <label className={`type - option ${currentAccount.type === "income" ? "active income" : ""} `}>
                       <input
                         type="radio"
                         name="accountType"
@@ -809,7 +953,7 @@ function Settings() {
                       />
                       <span>수입</span>
                     </label>
-                    <label className={`type-option ${currentAccount.type === "expense" ? "active expense" : ""}`}>
+                    <label className={`type - option ${currentAccount.type === "expense" ? "active expense" : ""} `}>
                       <input
                         type="radio"
                         name="accountType"
@@ -818,7 +962,7 @@ function Settings() {
                       />
                       <span>지출</span>
                     </label>
-                    <label className={`type-option ${currentAccount.type === "asset" ? "active asset" : ""}`}>
+                    <label className={`type - option ${currentAccount.type === "asset" ? "active asset" : ""} `}>
                       <input
                         type="radio"
                         name="accountType"

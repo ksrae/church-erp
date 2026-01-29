@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { saveData, loadData } from "../utils/fileStorage";
+import { logActivity } from "../utils/auditLog";
 import {
   formatCurrency as formatCurrencyUtil,
   formatLargeCurrency,
@@ -9,7 +10,7 @@ import {
   CurrencyCode,
 } from "../utils/currency";
 
-// Types
+// ... (Types imports remain same)
 import {
   Account,
   Transaction,
@@ -23,7 +24,7 @@ import {
   defaultAccounts,
 } from "../types/finance";
 
-// Components
+// ... (Components imports remain same)
 import {
   FinanceSidebar,
   FinanceHeader,
@@ -35,9 +36,17 @@ import {
 } from "../components/finance";
 import { DeleteConfirmModal } from "../components/common";
 
-// =============== Main Component ===============
+interface Member {
+  id: string;
+  name: string;
+  role?: string;
+}
+
+// ... (Main Component starts)
 function Finance() {
+  // ... (State definitions remain same)
   const [financeData, setFinanceData] = useState<FinanceData>(initialFinanceData);
+  const [members, setMembers] = useState<Member[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>("ledger");
   const [isLoading, setIsLoading] = useState(true);
 
@@ -49,31 +58,28 @@ function Finance() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ type: "account" | "transaction"; id: string } | null>(null);
 
-  // Filter states
+  // ... (Filter states remain same)
   const [dateFilter, setDateFilter] = useState({
     startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0],
     endDate: new Date().toISOString().split("T")[0],
   });
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Report states
+  // ... (Report/Currency/View states remain same)
   const [reportType, setReportType] = useState<"monthly" | "yearly">("monthly");
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
   const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
 
-  // Currency state for reactive updates
   const [currencyCode, setCurrencyCode] = useState<CurrencyCode>(getCurrentCurrencyCode());
   const [currencySymbol, setCurrencySymbol] = useState(getCurrencySymbol());
 
-  // Right panel detail view state
   const [detailView, setDetailView] = useState<DetailViewType>("overview");
 
-  // Monthly settlement selector state
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [showMonthSelector, setShowMonthSelector] = useState(false);
 
-  // =============== Data Loading ===============
+  // ... (Data Loading/Currency Listener/SaveData remain same)
   useEffect(() => {
     const loadFinanceData = async () => {
       setIsLoading(true);
@@ -98,8 +104,34 @@ function Finance() {
           };
           setFinanceData(initialData);
           await saveData("finance", initialData, "finance.json");
+          await saveData("finance", initialData, "finance.json");
           console.log("✅ Initial data saved");
         }
+
+        // Load members for income transaction form
+        try {
+          console.log("🔄 Loading members for finance form...");
+          let loadedMembers = await loadData<Member[]>("members");
+
+          // Fallback to LocalStorage if File System is empty/failed
+          if (!loadedMembers || loadedMembers.length === 0) {
+            console.log("⚠️ File system members empty, trying localStorage...");
+            const savedMembers = localStorage.getItem("church_erp_members");
+            if (savedMembers) {
+              loadedMembers = JSON.parse(savedMembers);
+            }
+          }
+
+          if (loadedMembers && loadedMembers.length > 0) {
+            console.log(`✅ Loaded ${loadedMembers.length} members for finance form`);
+            setMembers(loadedMembers);
+          } else {
+            console.warn("⚠️ No members found in both file system and localStorage");
+          }
+        } catch (error) {
+          console.error("❌ Failed to load members for finance form", error);
+        }
+
       } catch (error) {
         console.error("❌ Failed to load finance data:", error);
         setFinanceData({
@@ -115,7 +147,6 @@ function Finance() {
     loadFinanceData();
   }, []);
 
-  // Listen for currency changes
   useEffect(() => {
     const cleanup = setupCurrencyListener((newCode) => {
       setCurrencyCode(newCode);
@@ -124,7 +155,6 @@ function Finance() {
     return cleanup;
   }, []);
 
-  // =============== Data Saving ===============
   const saveFinanceData = async (data: FinanceData) => {
     const updatedData = { ...data, lastUpdated: new Date().toISOString() };
     setFinanceData(updatedData);
@@ -143,25 +173,35 @@ function Finance() {
   };
 
   // =============== Account CRUD ===============
-  const handleSaveAccount = (account: Account) => {
+  const handleSaveAccount = async (account: Account) => {
     let updatedAccounts: Account[];
+    let action = "";
 
     if (editingAccount) {
       updatedAccounts = financeData.accounts.map((a) =>
         a.id === account.id ? account : a
       );
+      action = `계정 수정: ${account.name}`;
+      console.log("✏️ Editing existing account:", account.name);
     } else {
       updatedAccounts = [...financeData.accounts, { ...account, id: `acc-${Date.now()}` }];
+      action = `새 계정 추가: ${account.name}`;
+      console.log("➕ Adding new account:", account.name);
     }
 
     saveFinanceData({ ...financeData, accounts: updatedAccounts });
+
+    // Log activity
+    await logActivity("FINANCE", action, `계정 이름: ${account.name}, 유형: ${account.type === 'income' ? '수입' : '지출'}`);
+
     setShowAccountModal(false);
     setEditingAccount(null);
   };
 
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = async () => {
     if (!deleteTarget || deleteTarget.type !== "account") return;
 
+    const accountToDelete = financeData.accounts.find(a => a.id === deleteTarget.id);
     const updatedAccounts = financeData.accounts.filter((a) => a.id !== deleteTarget.id);
     const updatedTransactions = financeData.transactions.filter(
       (t) => t.accountId !== deleteTarget.id
@@ -172,21 +212,34 @@ function Finance() {
       accounts: updatedAccounts,
       transactions: updatedTransactions,
     });
+
+    // Log activity
+    if (accountToDelete) {
+      await logActivity("FINANCE", "계정 삭제", `삭제된 계정: ${accountToDelete.name}`);
+    }
+
     setShowDeleteConfirm(false);
     setDeleteTarget(null);
   };
 
   // =============== Transaction CRUD ===============
-  const handleSaveTransaction = (transaction: Transaction) => {
+  const handleSaveTransaction = async (transaction: Transaction) => {
     console.log("📥 handleSaveTransaction called:", transaction);
 
     let updatedTransactions: Transaction[];
     const isEditing = editingTransaction && editingTransaction.id;
+    let action = "";
+    let description = "";
+
+    const account = financeData.accounts.find(a => a.id === transaction.accountId);
+    const accountName = account ? account.name : "Unknown Account";
 
     if (isEditing) {
       updatedTransactions = financeData.transactions.map((t) =>
         t.id === transaction.id ? transaction : t
       );
+      action = "거래 내역 수정";
+      description = `${transaction.date} - ${transaction.description} (${accountName}): ${formatCurrencyUtil(transaction.amount, true)}`;
       console.log("✏️ Editing existing transaction:", transaction.id);
     } else {
       const newTransaction = {
@@ -194,6 +247,8 @@ function Finance() {
         id: `txn-${Date.now()}`
       };
       updatedTransactions = [...financeData.transactions, newTransaction];
+      action = "새 거래 추가";
+      description = `${transaction.date} - ${transaction.description} (${accountName}): ${formatCurrencyUtil(transaction.amount, true)}`;
       console.log("➕ Adding new transaction:", newTransaction.id);
     }
 
@@ -201,17 +256,31 @@ function Finance() {
     setEditingTransaction(null);
     saveFinanceData({ ...financeData, transactions: updatedTransactions });
 
+    // Log activity
+    await logActivity("FINANCE", action, description);
+
     console.log("✅ Transaction saved, total:", updatedTransactions.length);
   };
 
-  const handleDeleteTransaction = () => {
+  const handleDeleteTransaction = async () => {
     if (!deleteTarget || deleteTarget.type !== "transaction") return;
 
+    const transactionToDelete = financeData.transactions.find(t => t.id === deleteTarget.id);
     const updatedTransactions = financeData.transactions.filter(
       (t) => t.id !== deleteTarget.id
     );
 
     saveFinanceData({ ...financeData, transactions: updatedTransactions });
+
+    // Log activity
+    if (transactionToDelete) {
+      await logActivity(
+        "FINANCE",
+        "거래 내역 삭제",
+        `${transactionToDelete.date} - ${transactionToDelete.description}: ${formatCurrencyUtil(transactionToDelete.amount, true)}`
+      );
+    }
+
     setShowDeleteConfirm(false);
     setDeleteTarget(null);
   };
@@ -637,6 +706,7 @@ function Finance() {
             <TransactionForm
               transaction={editingTransaction}
               accounts={financeData.accounts}
+              members={members}
               onSave={handleSaveTransaction}
               onCancel={() => {
                 setShowTransactionModal(false);

@@ -4,6 +4,8 @@ import DaumPostcode from "react-daum-postcode";
 import { convertFileSrc } from "@tauri-apps/api/tauri";
 import { loadData, saveData, saveImage, isTauriEnv } from "../utils/fileStorage";
 // removed original non-tauri imports
+import { CustomSelect } from "../components/common/CustomSelect";
+import { MemberSelect } from "../components/common/MemberSelect";
 const MEMBERS_STORAGE_KEY = "church_erp_members";
 
 interface OrgGroup {
@@ -61,6 +63,7 @@ function MemberRegistration() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -95,6 +98,28 @@ function MemberRegistration() {
       }
     };
     fetchOrgTree();
+  }, []);
+
+  // Load Members for Dropdown
+  useEffect(() => {
+    const fetchMembers = async () => {
+      let data = await loadData<Member[]>("members");
+
+      // Fallback to LocalStorage if File System is empty/failed
+      if (!data || data.length === 0) {
+        const savedMembers = localStorage.getItem(MEMBERS_STORAGE_KEY);
+        if (savedMembers) {
+          try {
+            data = JSON.parse(savedMembers);
+          } catch (e) {
+            console.error("Failed to parse local storage members", e);
+          }
+        }
+      }
+
+      if (data) setMembers(data);
+    };
+    fetchMembers();
   }, []);
 
   // Load Member Data for Editing
@@ -535,17 +560,17 @@ function MemberRegistration() {
                       <label className="form-label">
                         상태
                       </label>
-                      <select
-                        className="form-select"
+                      <CustomSelect
                         value={formData.status}
-                        onChange={(e) => handleInputChange("status", e.target.value)}
-                      >
-                        <option value="registered">등록 교인</option>
-                        <option value="visitor">방문자 (새신자)</option>
-                        <option value="long_absent">장기 결석</option>
-                        <option value="moved">이명 (전출)</option>
-                        <option value="other">기타</option>
-                      </select>
+                        onChange={(val: string) => handleInputChange("status", val)}
+                        options={[
+                          { value: "registered", label: "등록 교인" },
+                          { value: "visitor", label: "방문자 (새신자)" },
+                          { value: "long_absent", label: "장기 결석" },
+                          { value: "moved", label: "이명 (전출)" },
+                          { value: "other", label: "기타" },
+                        ]}
+                      />
                     </div>
 
                     {formData.status === "moved" && (
@@ -564,49 +589,43 @@ function MemberRegistration() {
                       <label className="form-label">
                         직분
                       </label>
-                      <select
-                        className="form-select"
+                      <CustomSelect
                         value={formData.position}
-                        onChange={(e) => handleInputChange("position", e.target.value)}
-                      >
-                        <option value="new">성도 (새신자)</option>
-                        <option value="member">서리집사</option>
-                        <option value="deacon">안수집사</option>
-                        <option value="elder_woman">권사</option>
-                        <option value="elder">장로</option>
-                        <option value="pastor">목사</option>
-                      </select>
+                        onChange={(val: string) => handleInputChange("position", val)}
+                        options={[
+                          { value: "new", label: "성도 (새신자)" },
+                          { value: "member", label: "서리집사" },
+                          { value: "deacon", label: "안수집사" },
+                          { value: "elder_woman", label: "권사" },
+                          { value: "elder", label: "장로" },
+                          { value: "pastor", label: "목사" },
+                        ]}
+                      />
                     </div>
 
                     <div className="form-group">
                       <label className="form-label">신급 (세례)</label>
-                      <select
-                        className="form-select"
+                      <CustomSelect
                         value={formData.baptism}
-                        onChange={(e) => handleInputChange("baptism", e.target.value)}
-                      >
-                        <option value="none">학습/세례 없음</option>
-                        <option value="learning">학습교인</option>
-                        <option value="baptism">세례교인</option>
-                        <option value="child_baptism">유아세례</option>
-                        <option value="confirmation">입교인</option>
-                      </select>
+                        onChange={(val: string) => handleInputChange("baptism", val)}
+                        options={[
+                          { value: "none", label: "학습/세례 없음" },
+                          { value: "learning", label: "학습교인" },
+                          { value: "baptism", label: "세례교인" },
+                          { value: "child_baptism", label: "유아세례" },
+                          { value: "confirmation", label: "입교인" },
+                        ]}
+                      />
                     </div>
 
                     <div className="form-group">
                       <label className="form-label">신앙세대주</label>
-                      <div className="form-input-group">
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="세대주 검색"
-                          value={formData.familyHead}
-                          onChange={(e) => handleInputChange("familyHead", e.target.value)}
-                        />
-                        <button type="button" className="form-btn" style={{ padding: "0.5rem" }}>
-                          <span className="material-symbols-outlined">search</span>
-                        </button>
-                      </div>
+                      <MemberSelect
+                        value={formData.familyHead}
+                        onChange={(val: string) => handleInputChange("familyHead", val)}
+                        members={members}
+                        placeholder="세대주 검색"
+                      />
                     </div>
                   </div>
                 </div>
@@ -626,33 +645,29 @@ function MemberRegistration() {
                   <div className="form-grid">
                     <div className="form-group">
                       <label className="form-label">교구/부서 선택</label>
-                      <select
-                        className="form-select"
+                      <CustomSelect
                         value={formData.districtId}
-                        onChange={(e) => {
-                          setFormData(prev => ({ ...prev, districtId: e.target.value, zoneId: "" }));
+                        onChange={(val: string) => {
+                          setFormData(prev => ({ ...prev, districtId: val, zoneId: "" }));
                         }}
-                      >
-                        <option value="">선택하세요</option>
-                        {orgTree.map(group => (
-                          <option key={group.id} value={group.id}>{group.name}</option>
-                        ))}
-                      </select>
+                        options={[
+                          { value: "", label: "선택하세요" },
+                          ...orgTree.map(group => ({ value: group.id, label: group.name }))
+                        ]}
+                      />
                     </div>
 
                     <div className="form-group">
                       <label className="form-label">구역/소그룹 선택</label>
-                      <select
-                        className="form-select"
+                      <CustomSelect
                         value={formData.zoneId}
-                        onChange={(e) => handleInputChange("zoneId", e.target.value)}
+                        onChange={(val: string) => handleInputChange("zoneId", val)}
                         disabled={!formData.districtId}
-                      >
-                        <option value="">선택하세요</option>
-                        {formData.districtId && orgTree.find(g => g.id === formData.districtId)?.children.map(child => (
-                          <option key={child.id} value={child.id}>{child.name}</option>
-                        ))}
-                      </select>
+                        options={[
+                          { value: "", label: "선택하세요" },
+                          ...(formData.districtId && orgTree.find(g => g.id === formData.districtId)?.children.map(child => ({ value: child.id, label: child.name })) || [])
+                        ]}
+                      />
                     </div>
 
                     <div className="form-group form-group--full">

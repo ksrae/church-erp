@@ -44,7 +44,7 @@ function TransactionTable({
         <tr>
           <th>날짜</th>
           <th>계정</th>
-          <th>설명</th>
+          {type === "income" && <th>성도</th>}
           <th className="text-right">금액</th>
           <th>메모</th>
           <th className="text-center" style={{ width: "8rem" }}>작업</th>
@@ -59,7 +59,7 @@ function TransactionTable({
                 {getAccountName(txn.accountId)}
               </span>
             </td>
-            <td>{txn.description}</td>
+            {type === "income" && <td>{txn.description}</td>}
             <td className={`text-right amount ${type}`}>
               {type === "income" ? "+" : "-"}{formatCurrency(txn.amount)}
             </td>

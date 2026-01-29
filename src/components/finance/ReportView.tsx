@@ -30,6 +30,22 @@ function ReportView({
     try {
       // CSV Header with BOM for Korean support
       let csv = "\uFEFF";
+
+      // Church info for CSV
+      let churchName = "";
+      try {
+        const stored = localStorage.getItem("church_erp_settings");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.church?.churchName) {
+            churchName = parsed.church.churchName;
+          }
+        }
+      } catch (e) { }
+
+      if (churchName) {
+        csv += `[${churchName}]\n`;
+      }
       csv += "날짜,구분,계정명,적요,금액,메모\n";
 
       let hasData = false;
@@ -144,6 +160,23 @@ function ReportView({
   };
 
   const generatePrintHTML = () => {
+    // 교회 정보 가져오기
+    let churchInfo = { name: "교회 관리 시스템", address: "", phone: "", logo: "" };
+    try {
+      const stored = localStorage.getItem("church_erp_settings");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.church) {
+          churchInfo = {
+            name: parsed.church.churchName || "교회 관리 시스템",
+            address: parsed.church.address || "",
+            phone: parsed.church.phone || "",
+            logo: parsed.church.logo || ""
+          };
+        }
+      }
+    } catch (e) { console.error("Failed to load church info for report", e); }
+
     const period = `${reportYear}년 ${reportType === 'monthly' ? reportMonth + '월' : ''}`;
 
     let rows = '';
@@ -198,7 +231,12 @@ function ReportView({
           <title>재정 보고서 - ${period}</title>
           <style>
             body { font-family: sans-serif; padding: 40px; color: #333; }
-            h1 { text-align: center; margin-bottom: 5px; }
+            .header-section { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 20px; }
+            .church-info { display: flex; align-items: center; gap: 15px; }
+            .church-logo { max-width: 60px; max-height: 60px; object-fit: contain; }
+            .church-details h2 { margin: 0; font-size: 24px; color: #1e40af; }
+            .church-details p { margin: 5px 0 0; font-size: 12px; color: #666; }
+            h1 { text-align: center; margin-bottom: 5px; font-size: 28px; }
             .meta { text-align: center; margin-bottom: 30px; color: #666; font-size: 14px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
@@ -215,6 +253,20 @@ function ReportView({
           </style>
         </head>
         <body>
+          <div class="header-section">
+            <div class="church-info">
+              ${churchInfo.logo ? `<img src="${churchInfo.logo}" class="church-logo" />` : ''}
+              <div class="church-details">
+                <h2>${churchInfo.name}</h2>
+                ${churchInfo.address ? `<p>${churchInfo.address}</p>` : ''}
+                ${churchInfo.phone ? `<p>${churchInfo.phone}</p>` : ''}
+              </div>
+            </div>
+            <div class="report-title">
+              <div style="font-size: 12px; color: #888; text-align: right;">발행일: ${new Date().toLocaleDateString()}</div>
+            </div>
+          </div>
+
           <h1>재정 보고서</h1>
           <div class="meta">${period}</div>
 

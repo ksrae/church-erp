@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
-import { loadData, isTauriEnv } from "../../utils/fileStorage";
+import { useState, useEffect } from "react";
+import { loadData } from "../../utils/fileStorage";
 import { saveAdminData, loadAdminData, hashPassword } from "../../utils/adminSecurity";
-import { convertFileSrc } from "@tauri-apps/api/tauri";
+import { CustomSelect } from "../common/CustomSelect";
+import { MemberSelect } from "../common/MemberSelect";
 import {
   AdminUser,
   AdminRole,
@@ -41,8 +42,6 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
 
   // Search state for member selection
   const [memberSearch, setMemberSearch] = useState("");
-  const [showMemberDropdown, setShowMemberDropdown] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -66,16 +65,7 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
     loadAllData();
   }, []);
 
-  // Handle click outside dropdown
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowMemberDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  // Removed handleClickOutside effect
 
   // Create default super admin
   const createDefaultAdmin = async (): Promise<AdminData> => {
@@ -105,8 +95,12 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
       if (!memberData || memberData.length === 0) {
         const savedMembers = localStorage.getItem(MEMBERS_STORAGE_KEY);
         if (savedMembers) {
-          memberData = JSON.parse(savedMembers);
-          console.log("📦 Loaded members from localStorage fallback");
+          try {
+            memberData = JSON.parse(savedMembers);
+            console.log("📦 Loaded members from localStorage fallback");
+          } catch (e) {
+            console.error("Failed to parse local storage members", e);
+          }
         }
       }
 
@@ -188,8 +182,6 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
     setPassword(""); // Don't show existing password
     setRole(admin.role);
     setMemberSearch(admin.memberName || "");
-    setShowMemberDropdown(false);
-
     setUsernameError(null);
     setIsUsernameValid(true); // Existing username is initially valid
 
@@ -197,10 +189,9 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
   };
 
   const closeModal = () => {
+    setMemberSearch("");
     setModalOpen(false);
     setEditingAdmin(null);
-    setMemberSearch("");
-    setShowMemberDropdown(false);
   };
 
   const handleSubmit = async () => {
@@ -228,6 +219,13 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
     // Member is required for ALL roles (except maybe initial setup, but UI enforces it)
     if (!selectedMemberId) {
       alert("연결할 성도를 반드시 선택해야 합니다.");
+      return;
+    }
+
+    // Check if member is already assigned to another admin
+    const isMemberUsed = admins.some(a => a.memberId === selectedMemberId && a.id !== editingAdmin?.id);
+    if (isMemberUsed) {
+      alert("이미 다른 관리자 계정에 연결된 성도입니다.");
       return;
     }
 
@@ -285,27 +283,6 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
     setDeleteConfirm(null);
   };
 
-  const selectMember = (member: Member) => {
-    setSelectedMemberId(member.id);
-    setMemberSearch(member.name);
-    setShowMemberDropdown(false);
-  };
-
-  // Get image source for member
-  const getMemberImageSrc = (member: Member): string | null => {
-    if (!member.profileImage) return null;
-
-    if (member.profileImage.startsWith("data:") || member.profileImage.startsWith("http")) {
-      return member.profileImage;
-    }
-
-    if (isTauriEnv()) {
-      return convertFileSrc(member.profileImage);
-    }
-
-    return member.profileImage;
-  };
-
   // Filter members by search, excluding those already linked to other admins
   const usedMemberIds = new Set(
     admins
@@ -313,13 +290,11 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
       .map(a => a.memberId)
   );
 
-  const filteredMembers = members.filter(
-    (m) =>
-      !usedMemberIds.has(m.id) &&
-      (m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-        (m.phone && m.phone.includes(memberSearch)) ||
-        (m.zone && m.zone.toLowerCase().includes(memberSearch.toLowerCase())))
-  );
+  const availableMembers = members.filter(m => !usedMemberIds.has(m.id));
+
+
+
+
 
   // Check if member selection is required
   // Check if member selection is required
@@ -366,7 +341,7 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
             {admins.map((admin) => (
               <tr key={admin.id}>
                 <td>
-                  <strong style={{ textTransform: "none" }}>{admin.username}</strong>
+                  <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{admin.username}</span>
                   {admin.id === DEFAULT_ADMIN_ID && (
                     <span
                       style={{
@@ -484,304 +459,61 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
             </div>
             <div className="modal__content">
               {/* Role - Move to top so user knows member requirement */}
-              <div className="form-group" style={{ marginBottom: "0.5rem" }}>
-                <label className="form-label">권한 *</label>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  {/* Super Admin Radio */}
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                      padding: "0.5rem",
-                      border: `1px solid ${role === "super" ? "var(--primary)" : "var(--border-color)"}`,
-                      borderRadius: "6px",
-                      background: role === "super" ? "var(--info-bg)" : "white",
-                      cursor: isSuperAdmin ? "pointer" : "not-allowed",
-                      opacity: isSuperAdmin ? 1 : 0.5
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="role"
-                      value="super"
-                      checked={role === "super"}
-                      onChange={() => setRole("super")}
-                      disabled={!isSuperAdmin}
-                    />
-                    <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                      슈퍼 관리자
-                      {!isSuperAdmin && <span style={{ color: "var(--danger)", fontSize: "0.75rem", marginLeft: "6px" }}>(권한 없음)</span>}
-                    </div>
-                  </label>
-
-                  {/* Finance Admin Radio */}
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                      padding: "0.5rem",
-                      border: `1px solid ${role === "finance" ? "var(--primary)" : "var(--border-color)"}`,
-                      borderRadius: "6px",
-                      background: role === "finance" ? "var(--info-bg)" : "white",
-                      cursor: isFinanceAdmin ? "pointer" : "not-allowed",
-                      opacity: isFinanceAdmin ? 1 : 0.5
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="role"
-                      value="finance"
-                      checked={role === "finance"}
-                      onChange={() => setRole("finance")}
-                      disabled={!isFinanceAdmin}
-                    />
-                    <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                      재정 관리자
-                      {!isFinanceAdmin && <span style={{ color: "var(--danger)", fontSize: "0.75rem", marginLeft: "6px" }}>(권한 없음)</span>}
-                    </div>
-                  </label>
-
-                  {/* Member Admin Radio */}
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                      padding: "0.5rem",
-                      border: `1px solid ${role === "member" ? "var(--primary)" : "var(--border-color)"}`,
-                      borderRadius: "6px",
-                      background: role === "member" ? "var(--info-bg)" : "white",
-                      cursor: (isSuperAdmin || currentUser?.role === "member") ? "pointer" : "not-allowed",
-                      opacity: (isSuperAdmin || currentUser?.role === "member") ? 1 : 0.5
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="role"
-                      value="member"
-                      checked={role === "member"}
-                      onChange={() => setRole("member")}
-                      disabled={!isSuperAdmin && currentUser?.role !== "member"}
-                    />
-                    <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                      성도 관리자
-                      {(!isSuperAdmin && currentUser?.role !== "member") && <span style={{ color: "var(--danger)", fontSize: "0.75rem", marginLeft: "6px" }}>(권한 없음)</span>}
-                    </div>
-                  </label>
-                </div>
-
-
-
-              </div>
+              <label className="form-label">권한 *</label>
+              <CustomSelect
+                value={role}
+                onChange={(val: string) => setRole(val as AdminRole)}
+                options={[
+                  ...(isSuperAdmin ? [{ value: "super", label: "슈퍼 관리자" }] : []),
+                  ...(isFinanceAdmin ? [{ value: "finance", label: "재정 관리자" }] : []),
+                  ...((isSuperAdmin || currentUser?.role === "member") ? [{ value: "member", label: "성도 관리자" }] : [])
+                ]}
+                placeholder="권한을 선택하세요"
+              />
 
               {/* Member Selection with Search */}
               <div className="form-group" style={{ marginBottom: "0.5rem" }}>
                 <label className="form-label">
                   연결할 성도 <span style={{ color: "var(--danger)" }}>*</span>
                 </label>
-                <div ref={dropdownRef} style={{ position: "relative" }}>
-                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                    <span
-                      className="material-symbols-outlined"
-                      style={{
-                        position: "absolute",
-                        left: "12px",
-                        color: "var(--text-muted)",
-                        fontSize: "20px",
-                        pointerEvents: "none",
-                        zIndex: 2
-                      }}
-                    >
-                      search
-                    </span>
-                    <input
-                      type="text"
-                      className="form-input"
-                      style={{
-                        paddingLeft: "2.75rem",
-                        paddingRight: "3rem",
-                        height: "44px",
-                        fontSize: "0.9375rem",
-                        borderRadius: "10px",
-                        border: "1px solid var(--border-color)",
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-                        transition: "all 0.2s"
-                      }}
-                      placeholder="성도 이름, 연락처, 소속으로 검색..."
-                      value={memberSearch}
-                      onChange={(e) => {
-                        setMemberSearch(e.target.value);
-                        setShowMemberDropdown(true);
-                        if (!e.target.value) setSelectedMemberId("");
-                      }}
-                      onFocus={() => setShowMemberDropdown(true)}
-                    />
-                    <div
-                      onClick={() => setShowMemberDropdown(!showMemberDropdown)}
-                      style={{
-                        position: "absolute",
-                        right: "0",
-                        top: "0",
-                        bottom: "0",
-                        width: "44px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                        color: "var(--text-secondary)",
-                        borderLeft: "1px solid var(--border-color)",
-                        background: "rgba(0,0,0,0.02)",
-                        borderTopRightRadius: "10px",
-                        borderBottomRightRadius: "10px",
-                        transition: "background 0.2s"
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
-                      onMouseLeave={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.02)"}
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{
-                          transform: showMemberDropdown ? "rotate(180deg)" : "rotate(0deg)",
-                          transition: "transform 0.2s"
-                        }}
-                      >
-                        expand_more
-                      </span>
-                    </div>
-                  </div>
-
-                  {showMemberDropdown && (
-                    <div
-                      className="animate-scaleIn"
-                      style={{
-                        position: "absolute",
-                        top: "calc(100% + 6px)",
-                        left: 0,
-                        width: "100%",
-                        maxHeight: "280px",
-                        overflowY: "auto",
-                        background: "white",
-                        border: "1px solid var(--border-color)",
-                        borderRadius: "12px",
-                        boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)",
-                        zIndex: 1000,
-                        padding: "6px"
-                      }}
-                    >
-                      {filteredMembers.length > 0 ? (
-                        filteredMembers.map(member => (
-                          <div
-                            key={member.id}
-                            onClick={() => selectMember(member)}
-                            style={{
-                              padding: "0.75rem 1rem",
-                              cursor: "pointer",
-                              borderRadius: "8px",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "1rem",
-                              transition: "all 0.2s"
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = "var(--info-bg)";
-                              e.currentTarget.style.transform = "translateX(4px)";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = "white";
-                              e.currentTarget.style.transform = "translateX(0)";
-                            }}
-                          >
-                            {/* Image/Avatar */}
-                            <div
-                              style={{
-                                width: "36px",
-                                height: "36px",
-                                borderRadius: "10px",
-                                background: "#f1f5f9",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                overflow: "hidden",
-                                flexShrink: 0,
-                                border: "1px solid #e2e8f0"
-                              }}
-                            >
-                              {getMemberImageSrc(member) ? (
-                                <img
-                                  src={getMemberImageSrc(member)!}
-                                  alt=""
-                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                />
-                              ) : (
-                                <span className="material-symbols-outlined" style={{ fontSize: "22px", color: "#94a3b8" }}>person</span>
-                              )}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "0.9375rem" }}>
-                                {member.name}
-                                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: "normal", marginLeft: "6px", background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>
-                                  성도
-                                </span>
-                              </div>
-                              <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", marginTop: "2px" }}>
-                                {member.phone || "연락처 없음"} {member.zone ? ` · ${member.zone}` : ""}
-                              </div>
-                            </div>
-                            <span className="material-symbols-outlined" style={{ fontSize: "18px", color: "#cbd5e1" }}>chevron_right</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div style={{ padding: "2rem 1rem", textAlign: "center", color: "var(--text-secondary)" }}>
-                          <span className="material-symbols-outlined" style={{ fontSize: "2.5rem", color: "#e2e8f0", marginBottom: "0.5rem" }}>search_off</span>
-                          <p style={{ fontSize: "0.875rem" }}>검색 결과가 없습니다.</p>
-                        </div>
-                      )}
-                    </div>
+                <div style={{ position: "relative" }}>
+                  <MemberSelect
+                    value={memberSearch}
+                    onChange={(val) => {
+                      setMemberSearch(val);
+                      // Try to finding exact match for ID linking
+                      // Note: If multiple members have same name, this simple find might be ambiguous.
+                      // Ideally MemberSelect passes ID? But it passes text.
+                      // Given 'availableMembers' are strictly valid members, we find matches.
+                      // If user types partial name, 'find' might fail or match wrong one?
+                      // Actually, MemberSelect's handleSelect calls onChange with NAME.
+                      // We need to trust the name.
+                      const matchedMember = availableMembers.find(m => m.name === val);
+                      if (matchedMember) {
+                        setSelectedMemberId(matchedMember.id);
+                      } else {
+                        if (selectedMemberId && members.find(m => m.id === selectedMemberId)?.name !== val) {
+                          // Cleared or changed
+                          setSelectedMemberId("");
+                        }
+                      }
+                    }}
+                    members={availableMembers}
+                    placeholder="성도 이름 검색..."
+                  />
+                  {!selectedMemberId && (
+                    <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>info</span>
+                      권한 부여를 위해 반드시 성도를 연결해야 합니다.
+                    </p>
+                  )}
+                  {selectedMemberId && (
+                    <p style={{ fontSize: "0.75rem", color: "var(--success)", marginTop: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>check_circle</span>
+                      성도가 선택되었습니다.
+                    </p>
                   )}
                 </div>
-                {selectedMemberId && (
-                  <div className="animate-fadeIn" style={{
-                    marginTop: "0.75rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                    background: "var(--success-bg)",
-                    padding: "0.75rem 1rem",
-                    borderRadius: "10px",
-                    border: "1px solid rgba(34, 197, 94, 0.2)"
-                  }}>
-                    <div style={{
-                      width: "32px", height: "32px", borderRadius: "8px", background: "white",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
-                    }}>
-                      <span className="material-symbols-outlined" style={{ color: "var(--success)", fontSize: "20px" }}>check_circle</span>
-                    </div>
-                    <span style={{ fontSize: "0.875rem", color: "#166534" }}>
-                      현재 선택된 성도: <strong>{members.find(m => m.id === selectedMemberId)?.name}</strong>
-                    </span>
-                    <button
-                      onClick={() => { setSelectedMemberId(""); setMemberSearch(""); }}
-                      style={{
-                        background: "white", border: "1px solid #e2e8f0", cursor: "pointer",
-                        padding: "4px", borderRadius: "6px", marginLeft: "auto",
-                        display: "flex", alignItems: "center", justifyContent: "center"
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.color = "var(--danger)"}
-                      onMouseLeave={(e) => e.currentTarget.style.color = "inherit"}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>close</span>
-                    </button>
-                  </div>
-                )}
-                {!selectedMemberId && (
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>info</span>
-                    권한 부여를 위해 반드시 성도를 연결해야 합니다.
-                  </p>
-                )}
               </div>
 
               {/* Username */}

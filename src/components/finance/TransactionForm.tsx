@@ -1,14 +1,25 @@
 import { useState, useEffect } from "react";
 import { Account, Transaction } from "../../types/finance";
+import { MemberSelect } from "../../components/common/MemberSelect";
+
+interface Member {
+  id: string;
+  name: string;
+  role?: string;
+  profileImage?: string;
+  phone?: string;
+  zone?: string;
+}
 
 interface TransactionFormProps {
   transaction: Transaction | null;
   accounts: Account[];
+  members: Member[];
   onSave: (transaction: Transaction) => void;
   onCancel: () => void;
 }
 
-function TransactionForm({ transaction, accounts, onSave, onCancel }: TransactionFormProps) {
+function TransactionForm({ transaction, accounts, members, onSave, onCancel }: TransactionFormProps) {
   const [formData, setFormData] = useState<Transaction>({
     id: "",
     accountId: "",
@@ -19,6 +30,8 @@ function TransactionForm({ transaction, accounts, onSave, onCancel }: Transactio
     category: "",
     memo: "",
   });
+
+  // ... (Removed unused dropdown logic)
 
   // Update form data when transaction prop changes
   useEffect(() => {
@@ -42,18 +55,29 @@ function TransactionForm({ transaction, accounts, onSave, onCancel }: Transactio
       : a.type === "expense" || a.type === "asset"
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleSubmit = (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
 
-    if (!formData.accountId || !formData.description || formData.amount <= 0) {
-      alert("계정, 설명, 금액은 필수입니다.");
+    // 지출인 경우 설명이 비어있으면 기본값 설정 (화면에선 숨김)
+    let finalDescription = formData.description;
+    if (formData.type === "expense" && !finalDescription) {
+      finalDescription = "지출";
+    }
+
+    if (!formData.accountId || !finalDescription || formData.amount <= 0) {
+      alert("계정, 성도(또는 설명), 금액은 필수입니다.");
       return;
     }
 
-    console.log("📝 Submitting transaction:", formData);
-    onSave(formData);
+    const payload = { ...formData, description: finalDescription };
+    console.log("📝 Submitting transaction:", payload);
+    onSave(payload);
   };
+
+  // ... (Removed unused filteredMembers and helper functions)
 
   return (
     <form className="transaction-form" onSubmit={handleSubmit}>
@@ -74,7 +98,8 @@ function TransactionForm({ transaction, accounts, onSave, onCancel }: Transactio
             onChange={(e) => setFormData({
               ...formData,
               type: e.target.value as "income" | "expense",
-              accountId: ""
+              accountId: "",
+              description: ""
             })}
           >
             <option value="income">수입</option>
@@ -97,16 +122,20 @@ function TransactionForm({ transaction, accounts, onSave, onCancel }: Transactio
           ))}
         </select>
       </div>
-      <div className="form-group">
-        <label>설명 <span className="required">*</span></label>
-        <input
-          type="text"
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          placeholder="거래 내용을 입력하세요"
-          required
-        />
-      </div>
+
+      {formData.type === "income" ? (
+        <div className="form-group">
+          <label>성도 <span className="required">*</span></label>
+          <MemberSelect
+            value={formData.description}
+            onChange={(val: string) => setFormData({ ...formData, description: val })}
+            members={members}
+            includeAnonymous={true}
+            placeholder="이름을 검색하거나 선택하세요"
+          />
+        </div>
+      ) : null}
+
       <div className="form-group">
         <label>금액 <span className="required">*</span></label>
         <input
@@ -123,7 +152,7 @@ function TransactionForm({ transaction, accounts, onSave, onCancel }: Transactio
         <textarea
           value={formData.memo}
           onChange={(e) => setFormData({ ...formData, memo: e.target.value })}
-          placeholder="추가 메모를 입력하세요"
+          placeholder={formData.type === "expense" ? "지출 상세 내역을 입력하세요" : "추가 메모를 입력하세요"}
           rows={3}
         />
       </div>
@@ -131,14 +160,18 @@ function TransactionForm({ transaction, accounts, onSave, onCancel }: Transactio
         <button
           type="button"
           className="btn-secondary"
-          onClick={(e) => { e.stopPropagation(); onCancel(); }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onCancel();
+          }}
         >
           취소
         </button>
         <button
-          type="submit"
+          type="button"
           className={`btn-primary ${formData.type}`}
-          onClick={(e) => e.stopPropagation()}
+          onMouseDown={handleSubmit}
         >
           {transaction?.id ? "수정" : "추가"}
         </button>

@@ -1,3 +1,4 @@
+
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Login from "./pages/Login";
@@ -8,6 +9,7 @@ import Finance from "./pages/Finance";
 import Resources from "./pages/Resources";
 import Settings from "./pages/Settings";
 import Help from "./pages/Help";
+import Notifications from "./pages/Notifications"; // Import Notifications
 import Layout from "./components/Layout";
 import { AdminUser, rolePermissions, AdminData } from "./types/admin";
 import { loadAdminData } from "./utils/adminSecurity";
@@ -188,6 +190,7 @@ function App() {
           />
           <Route path="settings" element={<Settings />} />
           <Route path="help" element={<Help />} />
+          <Route path="notifications" element={<Notifications />} /> {/* Add Route */}
         </Route>
       </Routes>
     </BrowserRouter>
