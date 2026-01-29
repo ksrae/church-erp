@@ -6,7 +6,7 @@ import {
   exists,
   BaseDirectory,
 } from "@tauri-apps/api/fs";
-import { appDataDir } from "@tauri-apps/api/path";
+
 
 const LOG_DIR = "logs";
 const LOG_FILE = "activity_log.bin";
