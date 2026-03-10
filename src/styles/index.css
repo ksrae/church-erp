@@ -8,6 +8,12 @@
    Church ERP - Global Styles
    =================================== */
 
+@import './login.css';
+@import './layout.css';
+@import './dashboard.css';
+@import './pages.css';
+
+
 /* CSS Reset & Variables */
 :root {
   /* Primary Colors */
@@ -403,4 +409,71 @@ button {
 
 .material-symbols-outlined.filled {
   font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+<<<<<<< HEAD
+=======
+}
+
+/* Print Styles */
+@media print {
+
+  .sidebar,
+  .finance-sidebar,
+  .top-header,
+  .finance-header,
+  .ledger-header__controls,
+  .transaction-header__actions,
+  .report-actions,
+  .report-controls-group,
+  .settings-modal-overlay,
+  .finance-stats,
+  .finance-chart-card__header button,
+  .ledger-table th:last-child,
+  .ledger-table td:last-child,
+  .detail-view-content .back-to-overview-btn,
+  .transaction-filters,
+  .action-buttons {
+    display: none !important;
+  }
+
+  .app-layout {
+    display: block !important;
+  }
+
+  .main-content,
+  .finance-content,
+  .finance-main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .page-content {
+    padding: 0 !important;
+  }
+
+  table {
+    width: 100% !important;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+>>>>>>> 7278c90eca6e56b45eccec36b389a741113c82c0
 }

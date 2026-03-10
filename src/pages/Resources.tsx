@@ -1,149 +1,87 @@
+import { useState, useEffect } from "react";
+
+const RESOURCES_STORAGE_KEY = "church_erp_resources";
+
+interface Resource {
+  id: string;
+  title: string;
+  description: string;
+  tag: string;
+  date: string;
+  author: string;
+  duration?: string;
+  fileType?: string;
+  imageUrl?: string;
+}
+
 function Resources() {
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [selectedFilter, setSelectedFilter] = useState<string>("all");
+
   const filters = [
-    { name: "주일 예배", checked: true },
-    { name: "수요 기도회", checked: false },
-    { name: "교육 부서", checked: false },
-    { name: "주보/행사", checked: false },
+    { id: "all", name: "전체" },
+    { id: "sermon", name: "주일 예배" },
+    { id: "prayer", name: "수요 기도회" },
+    { id: "education", name: "교육 부서" },
+    { id: "bulletin", name: "주보/행사" },
   ];
 
-  const resources = [
-    {
-      image: "https://images.unsplash.com/photo-1504052434569-70ad5836ab65?w=400&h=300&fit=crop",
-      tag: "주일 2부",
-      duration: "45:20",
-      date: "2023.10.29",
-      title: "믿음의 여정: 광야를 지나 약속의 땅으로",
-      description: "출애굽기 강해 14회(진1, 그날 속에서 찾아내는 믿음의 빛...",
-      author: "이상민 목사",
-      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=50&h=50&fit=crop",
-      isNew: true,
-    },
-    {
-      image: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400&h=300&fit=crop",
-      tag: "주보",
-      date: "2023.10.29",
-      title: "10월 5주차 주일 주보",
-      description: "예배 순서 안내 사항 주간 일정 및 기도제목...",
-      author: "자무국",
-      avatar: "",
-      isNew: false,
-    },
-    {
-      image: "https://images.unsplash.com/photo-1529070538774-1843cb3265df?w=400&h=300&fit=crop",
-      tag: "수요 기도회",
-      date: "2023.10.25",
-      title: "산상수훈 강해 (12)",
-      description: "마음이 청결한 자는 복이 있나니 그들은 하나님을 볼것임이요...",
-      author: "김형수 전도사",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50&h=50&fit=crop",
-      isNew: false,
-    },
-    {
-      image: "https://images.unsplash.com/photo-1508614589041-895b88991e3e?w=400&h=300&fit=crop",
-      tag: "교육 부서",
-      date: "2023.10.22",
-      title: "2023 가을 소풍 사진 모음",
-      description: "유치부 가을 소풍 활동 사진입니다. 아이들의 밝은 모습을...",
-      author: "유지부",
-      avatar: "",
-      isNew: false,
-    },
-    {
-      image: "https://images.unsplash.com/photo-1476234251651-f353703a034d?w=400&h=300&fit=crop",
-      tag: "행사 새벽기도",
-      date: "2023.10.15",
-      title: "가을 특별 새벽기도회 (5일차)",
-      description: "주제: 다시 기도로 일어서라. 본문: 느헤미야 1장...",
-      author: "이상민 목사",
-      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=50&h=50&fit=crop",
-      isNew: false,
-    },
-  ];
+  // 저장된 자료 데이터 로드
+  useEffect(() => {
+    const savedResources = localStorage.getItem(RESOURCES_STORAGE_KEY);
+    if (savedResources) {
+      try {
+        const parsed = JSON.parse(savedResources);
+        setResources(parsed);
+      } catch {
+        // 파싱 에러
+      }
+    }
+  }, []);
+
+  // 필터링된 자료
+  const filteredResources =
+    selectedFilter === "all"
+      ? resources
+      : resources.filter((r) => r.tag === selectedFilter);
 
   return (
     <div className="resources-page">
       {/* Sidebar */}
       <aside className="resources-sidebar">
         <div className="resources-sidebar__section">
-          <h3 className="resources-sidebar__title">MAIN MENU</h3>
-          <nav className="resources-nav">
-            <a className="resources-nav__item" href="#">
-              <span className="material-symbols-outlined">dashboard</span>
-              대시보드
-            </a>
-            <a className="resources-nav__item" href="#">
-              <span className="material-symbols-outlined">groups</span>
-              교인 관리
-            </a>
-            <a className="resources-nav__item active" href="#">
-              <span className="material-symbols-outlined">folder_open</span>
-              자료실 관리
-            </a>
-            <a className="resources-nav__item" href="#">
-              <span className="material-symbols-outlined">account_balance_wallet</span>
-              재정 관리
-            </a>
-          </nav>
-        </div>
-
-        <div className="resources-sidebar__section" style={{ marginTop: "1.5rem" }}>
           <h3 className="resources-sidebar__title">자료실 필터</h3>
           <nav className="resources-nav">
-            {filters.map((filter, index) => (
-              <label className="resources-nav__item" key={index} style={{ cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  className="resources-nav__checkbox"
-                  defaultChecked={filter.checked}
-                />
+            {filters.map((filter) => (
+              <button
+                key={filter.id}
+                className={`resources-nav__item ${selectedFilter === filter.id ? "active" : ""
+                  }`}
+                onClick={() => setSelectedFilter(filter.id)}
+                style={{
+                  cursor: "pointer",
+                  border: "none",
+                  background: selectedFilter === filter.id ? "rgba(22, 100, 156, 0.1)" : "transparent",
+                  width: "100%",
+                  textAlign: "left",
+                }}
+              >
                 {filter.name}
-              </label>
+              </button>
             ))}
           </nav>
         </div>
 
         <div className="resources-sidebar__section" style={{ marginTop: "1.5rem" }}>
-          <h3 className="resources-sidebar__title">날짜 범위</h3>
+          <h3 className="resources-sidebar__title">통계</h3>
           <nav className="resources-nav">
-            <span className="resources-nav__item" style={{ fontSize: "0.75rem", color: "#64748b" }}>
-              📅 2023.01 - 2023.12
+            <span
+              className="resources-nav__item"
+              style={{ fontSize: "0.875rem", color: "#64748b" }}
+            >
+              📁 전체 자료: {resources.length}개
             </span>
           </nav>
-        </div>
-
-        <div className="resources-sidebar__section" style={{ marginTop: "1.5rem" }}>
-          <h3 className="resources-sidebar__title">첨부 형식</h3>
-          <nav className="resources-nav">
-            <label className="resources-nav__item" style={{ cursor: "pointer" }}>
-              <input type="checkbox" className="resources-nav__checkbox" defaultChecked />
-              Video
-            </label>
-            <label className="resources-nav__item" style={{ cursor: "pointer" }}>
-              <input type="checkbox" className="resources-nav__checkbox" defaultChecked />
-              PDF
-            </label>
-          </nav>
-        </div>
-
-        {/* User Section */}
-        <div style={{ marginTop: "auto", padding: "1rem", borderTop: "1px solid var(--border-color)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <div
-              style={{
-                width: "2.5rem",
-                height: "2.5rem",
-                borderRadius: "var(--radius-full)",
-                background: "#e2e8f0",
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                backgroundImage: "url('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=50&h=50&fit=crop')",
-              }}
-            />
-            <div>
-              <p style={{ fontWeight: 600, fontSize: "0.875rem" }}>김목사 (Admin)</p>
-              <p style={{ fontSize: "0.75rem", color: "#64748b" }}>설정 및 로그아웃</p>
-            </div>
-          </div>
         </div>
       </aside>
 
@@ -172,60 +110,100 @@ function Resources() {
 
         {/* Resources Grid */}
         <div className="resources-grid">
-          {resources.map((resource, index) => (
-            <div className="resource-card" key={index}>
-              <div
-                className="resource-card__image"
-                style={{ backgroundImage: `url('${resource.image}')` }}
-              >
-                <span className="resource-card__tag">{resource.tag}</span>
-                {resource.isNew && <span className="resource-card__new">NEW</span>}
-                {resource.duration && (
-                  <span
-                    style={{
-                      position: "absolute",
-                      bottom: "0.5rem",
-                      right: "0.5rem",
-                      background: "rgba(0,0,0,0.7)",
-                      color: "white",
-                      fontSize: "0.625rem",
-                      padding: "0.125rem 0.375rem",
-                      borderRadius: "var(--radius-sm)",
-                    }}
-                  >
-                    {resource.duration}
-                  </span>
-                )}
-              </div>
-              <div className="resource-card__content">
-                <p className="resource-card__date">{resource.date}</p>
-                <h3 className="resource-card__title">{resource.title}</h3>
-                <p className="resource-card__description">{resource.description}</p>
-              </div>
-              <div className="resource-card__footer">
-                {resource.avatar ? (
-                  <div
-                    className="resource-card__author-avatar"
-                    style={{ backgroundImage: `url('${resource.avatar}')` }}
-                  />
-                ) : (
+          {filteredResources.length > 0 ? (
+            filteredResources.map((resource) => (
+              <div className="resource-card" key={resource.id}>
+                <div
+                  className="resource-card__image"
+                  style={{
+                    backgroundImage: resource.imageUrl
+                      ? `url('${resource.imageUrl}')`
+                      : undefined,
+                    backgroundColor: resource.imageUrl ? undefined : "#e2e8f0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {!resource.imageUrl && (
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "2.5rem", color: "#9ca3af" }}
+                    >
+                      folder_open
+                    </span>
+                  )}
+                  <span className="resource-card__tag">{resource.tag}</span>
+                  {resource.duration && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        bottom: "0.5rem",
+                        right: "0.5rem",
+                        background: "rgba(0,0,0,0.7)",
+                        color: "white",
+                        fontSize: "0.625rem",
+                        padding: "0.125rem 0.375rem",
+                        borderRadius: "var(--radius-sm)",
+                      }}
+                    >
+                      {resource.duration}
+                    </span>
+                  )}
+                </div>
+                <div className="resource-card__content">
+                  <p className="resource-card__date">{resource.date}</p>
+                  <h3 className="resource-card__title">{resource.title}</h3>
+                  <p className="resource-card__description">
+                    {resource.description}
+                  </p>
+                </div>
+                <div className="resource-card__footer">
                   <div
                     className="resource-card__author-avatar"
                     style={{ background: "#e2e8f0" }}
                   />
-                )}
-                <span className="resource-card__author-name">{resource.author}</span>
-                <div className="resource-card__actions">
-                  <button className="resource-card__action-btn">
-                    <span className="material-symbols-outlined">download</span>
-                  </button>
-                  <button className="resource-card__action-btn">
-                    <span className="material-symbols-outlined">share</span>
-                  </button>
+                  <span className="resource-card__author-name">
+                    {resource.author}
+                  </span>
+                  <div className="resource-card__actions">
+                    <button className="resource-card__action-btn">
+                      <span className="material-symbols-outlined">download</span>
+                    </button>
+                    <button className="resource-card__action-btn">
+                      <span className="material-symbols-outlined">delete</span>
+                    </button>
+                  </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div
+              style={{
+                gridColumn: "1 / -1",
+                textAlign: "center",
+                padding: "4rem",
+                color: "var(--text-secondary)",
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: "4rem",
+                  marginBottom: "1rem",
+                  display: "block",
+                }}
+              >
+                folder_off
+              </span>
+              <p style={{ fontSize: "1.125rem", fontWeight: 600 }}>
+                등록된 자료가 없습니다.
+              </p>
+              <p style={{ fontSize: "0.875rem", marginTop: "0.5rem" }}>
+                "새 자료 등록" 버튼을 클릭하여 자료를 추가해주세요.
+              </p>
             </div>
-          ))}
+          )}
 
           {/* Add New Card */}
           <div className="add-resource-card">
@@ -234,7 +212,9 @@ function Resources() {
             </div>
             <h3 className="add-resource-card__title">새 자료 추가</h3>
             <p className="add-resource-card__text">
-              설교 영상, 주보 또는 이미지<br />자료를 드래그하세요.
+              설교 영상, 주보 또는 이미지
+              <br />
+              자료를 드래그하세요.
             </p>
           </div>
         </div>

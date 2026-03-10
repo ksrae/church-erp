@@ -178,9 +178,9 @@
   color: var(--primary);
 }
 
-.form-input {
+.login-form .form-input {
   width: 100%;
-  padding: 0.875rem 1rem 0.875rem 2.75rem;
+  padding: 0.5rem 1rem 0.5rem 52px;
   border: 1px solid #d1d5db;
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.6);
@@ -190,11 +190,11 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.form-input::placeholder {
+.login-form .form-input::placeholder {
   color: #9ca3af;
 }
 
-.form-input:focus {
+.login-form .form-input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(22, 100, 156, 0.1);
 }
