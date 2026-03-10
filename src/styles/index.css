@@ -1,3 +1,9 @@
+/* Import component styles */
+@import './login.css';
+@import './layout.css';
+@import './dashboard.css';
+@import './pages.css';
+
 /* ===================================
    Church ERP - Global Styles
    =================================== */
@@ -398,9 +404,3 @@ button {
 .material-symbols-outlined.filled {
   font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
-
-/* Import component styles */
-@import './login.css';
-@import './layout.css';
-@import './dashboard.css';
-@import './pages.css';
