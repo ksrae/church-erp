@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { convertFileSrc } from "@tauri-apps/api/tauri";
 import { loadData, saveData, isTauriEnv } from "../utils/fileStorage";
+import { LayoutOutletContext } from "../components/Layout";
 
 const MEMBERS_STORAGE_KEY = "church_erp_members";
 const VIEW_STATE_KEY = "church_erp_members_view_state";
@@ -33,6 +34,9 @@ interface OrgGroup {
 
 function Members() {
   const navigate = useNavigate();
+  const { currentUser } = useOutletContext<LayoutOutletContext>();
+  const canEditOrg = currentUser?.role === "super" || currentUser?.role === "member";
+  const [editMode, setEditMode] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [orgTree, setOrgTree] = useState<OrgGroup[]>([]);
 
@@ -444,13 +448,28 @@ function Members() {
             <h2 className="members-sidebar__title">조직도</h2>
             <p className="members-sidebar__subtitle">교회 조직 및 부서 관리</p>
           </div>
-          <button
-            className="members-sidebar__add-btn"
-            title="그룹 추가"
-            onClick={() => openModal("add_group")}
-          >
-            <span className="material-symbols-outlined">add</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {canEditOrg && (
+              <label className="edit-mode-switch" title="편집 모드">
+                <input
+                  type="checkbox"
+                  checked={editMode}
+                  onChange={(e) => setEditMode(e.target.checked)}
+                />
+                <span className="edit-mode-switch__slider" />
+
+              </label>
+            )}
+            {editMode && (
+              <button
+                className="members-sidebar__add-btn"
+                title="그룹 추가"
+                onClick={() => openModal("add_group")}
+              >
+                <span className="material-symbols-outlined">add</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{ padding: '0 0.75rem 0.75rem' }}>
@@ -495,29 +514,31 @@ function Members() {
                     <span className="org-tree__count" style={{ marginLeft: '0.5rem', background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: '12px', fontSize: '0.75rem' }}>{org.count}</span>
                   </div>
 
-                  <div className="org-tree__actions" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '2px' }}>
-                    <button
-                      onClick={() => openModal("add_zone", undefined, org.id)}
-                      title="구역 추가"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>add_circle</span>
-                    </button>
-                    <button
-                      onClick={() => openModal("edit_group", org.id, undefined, org.name)}
-                      title="그룹 수정"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>edit</span>
-                    </button>
-                    <button
-                      onClick={() => handleDelete(org.id, false)}
-                      title="그룹 삭제"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>delete</span>
-                    </button>
-                  </div>
+                  {editMode && (
+                    <div className="org-tree__actions" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '2px' }}>
+                      <button
+                        onClick={() => openModal("add_zone", undefined, org.id)}
+                        title="구역 추가"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>add_circle</span>
+                      </button>
+                      <button
+                        onClick={() => openModal("edit_group", org.id, undefined, org.name)}
+                        title="그룹 수정"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(org.id, false)}
+                        title="그룹 삭제"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>delete</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {org.expanded && org.children.length > 0 && (
@@ -537,22 +558,24 @@ function Members() {
                           <span>{child.name}</span>
                         </div>
 
-                        <div className="org-tree__actions" style={{ display: 'flex', gap: '2px' }}>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); openModal("edit_zone", child.id, undefined, child.name); }}
-                            title="구역 수정"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#9ca3af' }}>edit</span>
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDelete(child.id, true, org.id); }}
-                            title="구역 삭제"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#9ca3af' }}>close</span>
-                          </button>
-                        </div>
+                        {editMode && (
+                          <div className="org-tree__actions" style={{ display: 'flex', gap: '2px' }}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openModal("edit_zone", child.id, undefined, child.name); }}
+                              title="구역 수정"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#9ca3af' }}>edit</span>
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDelete(child.id, true, org.id); }}
+                              title="구역 삭제"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#9ca3af' }}>close</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

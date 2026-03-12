@@ -409,8 +409,6 @@ button {
 
 .material-symbols-outlined.filled {
   font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-<<<<<<< HEAD
-=======
 }
 
 /* Print Styles */
@@ -475,5 +473,4 @@ button {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
->>>>>>> 7278c90eca6e56b45eccec36b389a741113c82c0
 }
