@@ -1,17 +1,7 @@
 import { useState, useEffect } from "react";
 import { loadData } from "../../utils/fileStorage";
-import { saveAdminData, loadAdminData, hashPassword } from "../../utils/adminSecurity";
-import { CustomSelect } from "../common/CustomSelect";
-import { MemberSelect } from "../common/MemberSelect";
-import {
-  AdminUser,
-  AdminRole,
-  AdminData,
-  roleLabels,
-} from "../../types/admin";
-
-const MEMBERS_STORAGE_KEY = "church_erp_members";
-const DEFAULT_ADMIN_ID = "admin-super-default";
+import { loadAllAdmins, saveAdminUser, deleteAdminUser, AdminUser } from "../../utils/adminSecurity";
+import { AdminRole, roleLabels } from "../../types/admin";
 
 interface AdminManagementProps {
   currentUser?: AdminUser | null;
@@ -29,607 +19,279 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
-
-  // Form state
-  const [selectedMemberId, setSelectedMemberId] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<AdminRole>("member");
-
-  // Search state for member selection
-  const [memberSearch, setMemberSearch] = useState("");
-
-  // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
+  // 새 관리자 초대 폼
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<AdminRole>("member");
+  const [inviteMemberId, setInviteMemberId] = useState("");
+  const [inviteMemberName, setInviteMemberName] = useState("");
 
+  // 역할 수정 폼
+  const [editRole, setEditRole] = useState<AdminRole>("member");
+  const [editMemberId, setEditMemberId] = useState("");
+  const [editMemberName, setEditMemberName] = useState("");
 
+  const isSuperAdmin = currentUser?.role === "super";
 
-  // Tooltip state
-  const [showDefaultTooltip, setShowDefaultTooltip] = useState(false);
-
-  // Check permissions for UI rendering
-  // If currentUser is null, we assume super access (e.g. initial setup or dev)
-  const isSuperAdmin = !currentUser || currentUser.role === "super" || currentUser.username === "admin";
-  const isFinanceAdmin = isSuperAdmin || currentUser.role === "finance";
-
-  // Username validation state
-  const [usernameError, setUsernameError] = useState<string | null>(null);
-  const [isUsernameValid, setIsUsernameValid] = useState(false);
-
-  useEffect(() => {
-    loadAllData();
-  }, []);
-
-  // Removed handleClickOutside effect
-
-  // Create default super admin
-  const createDefaultAdmin = async (): Promise<AdminData> => {
-    const defaultPasswordHash = await hashPassword("admin");
-    const defaultAdmin: AdminUser = {
-      id: DEFAULT_ADMIN_ID,
-      memberId: "",
-      memberName: "시스템 관리자",
-      username: "admin",
-      passwordHash: defaultPasswordHash,
-      role: "super",
-      createdAt: new Date().toISOString(),
-    };
-
-    return {
-      admins: [defaultAdmin],
-      lastUpdated: new Date().toISOString(),
-    };
-  };
+  useEffect(() => { loadAllData(); }, []);
 
   const loadAllData = async () => {
+    setIsLoading(true);
     try {
-      // Load members first - try file system, then localStorage fallback
-      let memberData = await loadData<Member[]>("members");
-
-      // Fallback to LocalStorage if file system failed
-      if (!memberData || memberData.length === 0) {
-        const savedMembers = localStorage.getItem(MEMBERS_STORAGE_KEY);
-        if (savedMembers) {
-          try {
-            memberData = JSON.parse(savedMembers);
-            console.log("📦 Loaded members from localStorage fallback");
-          } catch (e) {
-            console.error("Failed to parse local storage members", e);
-          }
-        }
-      }
-
-      if (memberData && memberData.length > 0) {
-        setMembers(memberData);
-        console.log(`✅ Loaded ${memberData.length} members`);
-      } else {
-        console.log("ℹ️ No members found");
-      }
-
-      // Load admins from secure binary file
-      let adminData: AdminData | null = null;
-
-      try {
-        adminData = await loadAdminData<AdminData>();
-      } catch (error) {
-        console.error("❌ Admin file corrupted or invalid, resetting to default:", error);
-        adminData = null;
-      }
-
-      // If no admin data or corrupted, create default super admin
-      if (!adminData || !adminData.admins || adminData.admins.length === 0) {
-        console.log("🔄 Initializing default admin account...");
-        adminData = await createDefaultAdmin();
-        await saveAdminData(adminData);
-      }
-
-      setAdmins(adminData.admins);
-    } catch (e) {
-      console.error("Failed to load data:", e);
-      // Even on error, try to create default admin
-      try {
-        const adminData = await createDefaultAdmin();
-        await saveAdminData(adminData);
-        setAdmins(adminData.admins);
-      } catch (err) {
-        console.error("Failed to create default admin:", err);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const saveAdmins = async (newAdmins: AdminUser[]) => {
-    const data: AdminData = {
-      admins: newAdmins,
-      lastUpdated: new Date().toISOString(),
-    };
-    await saveAdminData(data);
-    setAdmins(newAdmins);
-  };
-
-  const openAddModal = () => {
-    setEditingAdmin(null);
-    setSelectedMemberId("");
-    setUsername("");
-    setPassword("");
-
-    // Set default role to the highest permission available to the user
-    // This UX prevents the misconception that only "member" role is available
-    if (isSuperAdmin) {
-      setRole("super");
-    } else if (isFinanceAdmin) {
-      setRole("finance");
-    } else {
-      setRole("member");
-    }
-
-    setMemberSearch("");
-    setUsernameError(null);
-    setIsUsernameValid(false);
-    setModalOpen(true);
+      const [adminList, memberData] = await Promise.all([
+        loadAllAdmins(),
+        loadData<Member[]>("members"),
+      ]);
+      setAdmins(adminList);
+      if (memberData) setMembers(memberData);
+    } catch (e) { console.error(e); }
+    finally { setIsLoading(false); }
   };
 
   const openEditModal = (admin: AdminUser) => {
     setEditingAdmin(admin);
-    setSelectedMemberId(admin.memberId || "");
-    setUsername(admin.username);
-    setPassword(""); // Don't show existing password
-    setRole(admin.role);
-    setMemberSearch(admin.memberName || "");
-    setUsernameError(null);
-    setIsUsernameValid(true); // Existing username is initially valid
-
+    setEditRole(admin.role);
+    setEditMemberId(admin.memberId || "");
+    setEditMemberName(admin.memberName || "");
     setModalOpen(true);
   };
 
   const closeModal = () => {
-    setMemberSearch("");
     setModalOpen(false);
     setEditingAdmin(null);
   };
 
-  const handleSubmit = async () => {
-    // Validation
-    if (!username.trim()) {
-      setUsernameError("아이디를 입력해주세요.");
-      return;
-    }
-
-    // Check username uniqueness (except for current editing admin)
-    const existingUsername = admins.find(
-      (a) => a.username === username && a.id !== editingAdmin?.id
-    );
-    if (existingUsername) {
-      setUsernameError("이미 사용 중인 아이디입니다.");
-      setIsUsernameValid(false);
-      return;
-    }
-
-    if (!editingAdmin && !password.trim()) {
-      alert("비밀번호를 입력해주세요.");
-      return;
-    }
-
-    // Member is required for ALL roles (except maybe initial setup, but UI enforces it)
-    if (!selectedMemberId) {
-      alert("연결할 성도를 반드시 선택해야 합니다.");
-      return;
-    }
-
-    // Check if member is already assigned to another admin
-    const isMemberUsed = admins.some(a => a.memberId === selectedMemberId && a.id !== editingAdmin?.id);
-    if (isMemberUsed) {
-      alert("이미 다른 관리자 계정에 연결된 성도입니다.");
-      return;
-    }
-
-    const selectedMember = members.find((m) => m.id === selectedMemberId);
-
-    if (editingAdmin) {
-      // Update existing admin
-      let newPasswordHash = editingAdmin.passwordHash;
-      if (password.trim()) {
-        newPasswordHash = await hashPassword(password);
-      }
-
-      const updatedAdmins = admins.map((a) =>
-        a.id === editingAdmin.id
-          ? {
-            ...a,
-            memberId: selectedMemberId,
-            memberName: selectedMember?.name || (role === "super" ? "시스템 관리자" : a.memberName),
-            username,
-            passwordHash: newPasswordHash,
-            role,
-          }
-          : a
-      );
-      await saveAdmins(updatedAdmins);
-    } else {
-      // Add new admin
-      const passwordHash = await hashPassword(password);
-
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) { alert("이메일을 입력해주세요."); return; }
+    // 초대된 사용자는 다음 번 구글 로그인 때 자동으로 admin으로 등록됨
+    // 여기서는 Firestore에 "초대된 이메일" 레코드를 미리 만들어 놓는 방식
+    setIsSaving(true);
+    try {
       const newAdmin: AdminUser = {
-        id: `admin-${Date.now()}`,
-        memberId: selectedMemberId,
-        memberName: selectedMember?.name || (role === "super" ? "시스템 관리자" : "알 수 없음"),
-        username,
-        passwordHash,
-        role,
+        id: `invited-${Date.now()}`,  // 실제 구글 로그인 시 UID로 교체됨
+        email: inviteEmail.trim().toLowerCase(),
+        displayName: inviteMemberName || inviteEmail.split("@")[0],
+        memberId: inviteMemberId,
+        memberName: inviteMemberName,
+        username: inviteEmail.split("@")[0],
+        role: inviteRole,
         createdAt: new Date().toISOString(),
       };
-      await saveAdmins([...admins, newAdmin]);
+      await saveAdminUser(newAdmin);
+      setAdmins((prev) => [...prev, newAdmin]);
+      setInviteEmail("");
+      setInviteRole("member");
+      setInviteMemberId("");
+      setInviteMemberName("");
+      alert("관리자가 등록되었습니다. 해당 구글 계정으로 로그인하면 자동 연결됩니다.");
+    } catch (e: any) {
+      alert(`등록 실패: ${e.message}`);
+    } finally {
+      setIsSaving(false);
     }
+  };
 
-    closeModal();
+  const handleSaveEdit = async () => {
+    if (!editingAdmin) return;
+    setIsSaving(true);
+    try {
+      const updated: AdminUser = {
+        ...editingAdmin,
+        role: editRole,
+        memberId: editMemberId,
+        memberName: editMemberName,
+      };
+      await saveAdminUser(updated);
+      setAdmins((prev) => prev.map((a) => (a.id === editingAdmin.id ? updated : a)));
+      closeModal();
+    } catch (e: any) {
+      alert(`저장 실패: ${e.message}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async (adminId: string) => {
-    // Prevent deleting default super admin
-    if (adminId === DEFAULT_ADMIN_ID) {
-      alert("기본 슈퍼 관리자는 삭제할 수 없습니다.");
-      setDeleteConfirm(null);
-      return;
+    if (adminId === currentUser?.id) { alert("자기 자신은 삭제할 수 없습니다."); return; }
+    try {
+      await deleteAdminUser(adminId);
+      setAdmins((prev) => prev.filter((a) => a.id !== adminId));
+    } catch (e: any) {
+      alert(`삭제 실패: ${e.message}`);
     }
-
-    const updatedAdmins = admins.filter((a) => a.id !== adminId);
-    await saveAdmins(updatedAdmins);
     setDeleteConfirm(null);
   };
 
-  // Filter members by search, excluding those already linked to other admins
-  const usedMemberIds = new Set(
-    admins
-      .filter(a => a.memberId && a.id !== editingAdmin?.id)
-      .map(a => a.memberId)
-  );
-
-  const availableMembers = members.filter(m => !usedMemberIds.has(m.id));
-
-
-
-
-
-  // Check if member selection is required
-  // Check if member selection is required
-
-
-  if (isLoading) {
-    return (
-      <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)" }}>
-        불러오는 중...
-      </div>
-    );
-  }
+  if (isLoading) return <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)" }}>불러오는 중...</div>;
 
   return (
-    <div className="admin-management">
-      {/* Header */}
+    <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
         <div>
           <h3 style={{ fontSize: "1.125rem", fontWeight: 600, margin: 0 }}>관리자 계정</h3>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", margin: "0.25rem 0 0" }}>
-            시스템에 접근할 수 있는 관리자를 관리합니다. (암호화 저장)
+            구글 계정으로 로그인하는 관리자를 관리합니다.
           </p>
         </div>
-        <button className="btn btn--primary" onClick={openAddModal}>
-          <span className="material-symbols-outlined">person_add</span>
-          관리자 추가
-        </button>
       </div>
 
-      {/* Admin List */}
-      <div className="form-card" style={{ padding: 0 }}>
+      {/* 관리자 목록 */}
+      <div className="form-card" style={{ padding: 0, marginBottom: "1.5rem" }}>
         <table className="ledger-table">
           <thead>
             <tr>
-              <th>아이디</th>
-              <th>연결된 성도</th>
+              <th>이름</th>
+              <th>이메일</th>
               <th>권한</th>
-              <th>생성일</th>
               <th>마지막 로그인</th>
-              <th style={{ width: "100px", textAlign: "center" }}>관리</th>
+              {isSuperAdmin && <th style={{ width: "80px", textAlign: "center" }}>관리</th>}
             </tr>
           </thead>
           <tbody>
             {admins.map((admin) => (
               <tr key={admin.id}>
                 <td>
-                  <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{admin.username}</span>
-                  {admin.id === DEFAULT_ADMIN_ID && (
-                    <span
-                      style={{
-                        color: "var(--primary)",
-                        marginLeft: "4px",
-                        cursor: "help",
-                        position: "relative",
-                        display: "inline-block",
-                      }}
-                      onMouseEnter={() => setShowDefaultTooltip(true)}
-                      onMouseLeave={() => setShowDefaultTooltip(false)}
-                    >
-                      *
-                      {showDefaultTooltip && (
-                        <span
-                          style={{
-                            position: "absolute",
-                            left: "100%",
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            marginLeft: "8px",
-                            padding: "6px 10px",
-                            background: "rgba(0, 0, 0, 0.85)",
-                            color: "white",
-                            fontSize: "0.75rem",
-                            fontWeight: "normal",
-                            borderRadius: "4px",
-                            whiteSpace: "nowrap",
-                            zIndex: 1000,
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                          }}
-                        >
-                          기본 관리자
-                        </span>
-                      )}
-                    </span>
-                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+                    {admin.photoURL ? (
+                      <img src={admin.photoURL} alt="" style={{ width: "2rem", height: "2rem", borderRadius: "50%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: "2rem", height: "2rem", borderRadius: "50%", background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "0.875rem", fontWeight: 700 }}>
+                        {(admin.displayName || admin.email).charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span style={{ fontWeight: 600 }}>{admin.displayName || admin.email}</span>
+                    {admin.id === currentUser?.id && (
+                      <span style={{ fontSize: "0.7rem", padding: "1px 6px", background: "#eff6ff", color: "#16649c", borderRadius: "10px" }}>나</span>
+                    )}
+                  </div>
                 </td>
-                <td>{admin.memberName || "-"}</td>
+                <td style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>{admin.email}</td>
                 <td>
                   <span className={`status-badge status-badge--${admin.role === "super" ? "registered" : admin.role === "finance" ? "visitor" : "moved"}`}>
                     {roleLabels[admin.role]}
                   </span>
                 </td>
                 <td style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-                  {new Date(admin.createdAt).toLocaleDateString("ko-KR")}
-                </td>
-                <td style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>
                   {admin.lastLogin ? new Date(admin.lastLogin).toLocaleString("ko-KR") : "-"}
                 </td>
-                <td>
-                  <div style={{ display: "flex", gap: "0.25rem", justifyContent: "center" }}>
-                    <button
-                      onClick={() => openEditModal(admin)}
-                      disabled={!isSuperAdmin && currentUser?.role !== admin.role}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: (!isSuperAdmin && currentUser?.role !== admin.role) ? "not-allowed" : "pointer",
-                        padding: "4px",
-                        opacity: (!isSuperAdmin && currentUser?.role !== admin.role) ? 0.3 : 1
-                      }}
-                      title="수정"
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "20px", color: "var(--text-secondary)" }}>
-                        edit
-                      </span>
-                    </button>
-                    {admin.id !== DEFAULT_ADMIN_ID && (
-                      <button
-                        onClick={() => setDeleteConfirm(admin.id)}
-                        disabled={!isSuperAdmin && currentUser?.role !== admin.role}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: (!isSuperAdmin && currentUser?.role !== admin.role) ? "not-allowed" : "pointer",
-                          padding: "4px",
-                          opacity: (!isSuperAdmin && currentUser?.role !== admin.role) ? 0.3 : 1
-                        }}
-                        title="삭제"
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: "20px", color: "var(--danger)" }}>
-                          delete
-                        </span>
+                {isSuperAdmin && (
+                  <td>
+                    <div style={{ display: "flex", gap: "0.25rem", justifyContent: "center" }}>
+                      <button onClick={() => openEditModal(admin)} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px" }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: "1.25rem", color: "var(--text-secondary)" }}>edit</span>
                       </button>
-                    )}
-                  </div>
-                </td>
+                      {admin.id !== currentUser?.id && (
+                        <button onClick={() => setDeleteConfirm(admin.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px" }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: "1.25rem", color: "var(--danger)" }}>delete</span>
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
-
-        {admins.length === 0 && (
-          <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)" }}>
-            <span className="material-symbols-outlined" style={{ fontSize: "3rem", marginBottom: "0.5rem", display: "block" }}>
-              admin_panel_settings
-            </span>
-            <p>등록된 관리자가 없습니다.</p>
-          </div>
-        )}
       </div>
 
-      {/* Add/Edit Modal */}
-      {modalOpen && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ width: "500px" }}>
-            <div className="modal__header">
-              <h3 className="modal__title">
-                {editingAdmin ? "관리자 수정" : "관리자 추가"}
-              </h3>
-              <button className="modal__close" onClick={closeModal}>
-                <span className="material-symbols-outlined">close</span>
-              </button>
+      {/* 새 관리자 초대 (슈퍼 관리자만) */}
+      {isSuperAdmin && (
+        <div className="form-card">
+          <h4 style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "1rem" }}>관리자 추가</h4>
+          <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
+            추가할 관리자의 구글 이메일을 등록하세요. 해당 계정으로 구글 로그인 시 자동으로 접근 권한이 부여됩니다.
+          </p>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">구글 이메일 *</label>
+              <input type="email" className="form-input" placeholder="example@gmail.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
             </div>
-            <div className="modal__content">
-              {/* Role - Move to top so user knows member requirement */}
-              <label className="form-label">권한 *</label>
-              <CustomSelect
-                value={role}
-                onChange={(val: string) => setRole(val as AdminRole)}
-                options={[
-                  ...(isSuperAdmin ? [{ value: "super", label: "슈퍼 관리자" }] : []),
-                  ...(isFinanceAdmin ? [{ value: "finance", label: "재정 관리자" }] : []),
-                  ...((isSuperAdmin || currentUser?.role === "member") ? [{ value: "member", label: "성도 관리자" }] : [])
-                ]}
-                placeholder="권한을 선택하세요"
-              />
-
-              {/* Member Selection with Search */}
-              <div className="form-group" style={{ marginBottom: "0.5rem" }}>
-                <label className="form-label">
-                  연결할 성도 <span style={{ color: "var(--danger)" }}>*</span>
-                </label>
-                <div style={{ position: "relative" }}>
-                  <MemberSelect
-                    value={memberSearch}
-                    onChange={(val) => {
-                      setMemberSearch(val);
-                      // Try to finding exact match for ID linking
-                      // Note: If multiple members have same name, this simple find might be ambiguous.
-                      // Ideally MemberSelect passes ID? But it passes text.
-                      // Given 'availableMembers' are strictly valid members, we find matches.
-                      // If user types partial name, 'find' might fail or match wrong one?
-                      // Actually, MemberSelect's handleSelect calls onChange with NAME.
-                      // We need to trust the name.
-                      const matchedMember = availableMembers.find(m => m.name === val);
-                      if (matchedMember) {
-                        setSelectedMemberId(matchedMember.id);
-                      } else {
-                        if (selectedMemberId && members.find(m => m.id === selectedMemberId)?.name !== val) {
-                          // Cleared or changed
-                          setSelectedMemberId("");
-                        }
-                      }
-                    }}
-                    members={availableMembers}
-                    placeholder="성도 이름 검색..."
-                  />
-                  {!selectedMemberId && (
-                    <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>info</span>
-                      권한 부여를 위해 반드시 성도를 연결해야 합니다.
-                    </p>
-                  )}
-                  {selectedMemberId && (
-                    <p style={{ fontSize: "0.75rem", color: "var(--success)", marginTop: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: "14px" }}>check_circle</span>
-                      성도가 선택되었습니다.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Username */}
-              <div className="form-group" style={{ marginBottom: "0.5rem" }}>
-                <label className="form-label">아이디 *</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="로그인 아이디"
-                  value={username}
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  autoComplete="off"
-                  onChange={(e) => {
-                    setUsername(e.target.value);
-                    setUsernameError(null);
-                    setIsUsernameValid(false);
-                  }}
-                  onBlur={() => {
-                    if (!username.trim()) {
-                      setUsernameError("아이디를 입력해주세요.");
-                      setIsUsernameValid(false);
-                      return;
-                    }
-                    const isDuplicate = admins.some(a => a.username === username && a.id !== editingAdmin?.id);
-                    if (isDuplicate) {
-                      setUsernameError("이미 사용 중인 아이디입니다.");
-                      setIsUsernameValid(false);
-                    } else {
-                      setUsernameError(null);
-                      setIsUsernameValid(true);
-                    }
-                  }}
-                  style={{
-                    borderColor: usernameError ? "var(--danger)" : isUsernameValid ? "var(--success)" : "var(--border-color)",
-                  }}
-                />
-                {usernameError && (
-                  <p style={{ fontSize: "0.75rem", color: "var(--danger)", marginTop: "4px" }}>
-                    {usernameError}
-                  </p>
-                )}
-                {!usernameError && isUsernameValid && username && (
-                  <p style={{ fontSize: "0.75rem", color: "var(--success)", marginTop: "4px" }}>
-                    사용 가능한 아이디입니다.
-                  </p>
-                )}
-              </div>
-
-              {/* Password */}
-              <div className="form-group" style={{ marginBottom: "0.5rem" }}>
-                <label className="form-label">
-                  비밀번호 {editingAdmin ? "(변경 시에만 입력)" : "*"}
-                </label>
-                <input
-                  type="password"
-                  className="form-input"
-                  placeholder={editingAdmin ? "새 비밀번호 (선택사항)" : "비밀번호"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "4px" }}>
-                  비밀번호는 암호화되어 저장됩니다.
-                </p>
-              </div>
+            <div className="form-group">
+              <label className="form-label">권한</label>
+              <select className="form-select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as AdminRole)}>
+                <option value="super">슈퍼 관리자</option>
+                <option value="finance">재정 관리자</option>
+                <option value="member">성도 관리자</option>
+              </select>
             </div>
-            <div className="modal__footer">
-              <button className="btn btn--outline" onClick={closeModal}>
-                취소
-              </button>
-              <button className="btn btn--primary" onClick={handleSubmit}>
-                {editingAdmin ? "저장" : "추가"}
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">표시 이름</label>
+              <input type="text" className="form-input" placeholder="홍길동" value={inviteMemberName} onChange={(e) => setInviteMemberName(e.target.value)} />
+            </div>
+            <div className="form-group" style={{ display: "flex", alignItems: "flex-end" }}>
+              <button className="btn btn--primary" onClick={handleInvite} disabled={isSaving} style={{ width: "100%" }}>
+                <span className="material-symbols-outlined">person_add</span>
+                {isSaving ? "등록 중..." : "관리자 등록"}
               </button>
             </div>
           </div>
         </div>
-      )
-      }
+      )}
 
-      {/* Delete Confirmation Modal */}
-      {
-        deleteConfirm && (
-          <div className="modal-overlay">
-            <div className="modal" style={{ width: "400px" }}>
-              <div className="modal__header">
-                <h3 className="modal__title" style={{ color: "var(--danger)" }}>
-                  <span className="material-symbols-outlined" style={{ verticalAlign: "bottom", marginRight: "8px" }}>
-                    warning
-                  </span>
-                  관리자 삭제
-                </h3>
-                <button className="modal__close" onClick={() => setDeleteConfirm(null)}>
-                  <span className="material-symbols-outlined">close</span>
-                </button>
+      {/* 역할 수정 모달 */}
+      {modalOpen && editingAdmin && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ width: "420px" }}>
+            <div className="modal__header">
+              <h3 className="modal__title">관리자 권한 수정</h3>
+              <button className="modal__close" onClick={closeModal}><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <div className="modal__content">
+              <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
+                {editingAdmin.email}
+              </p>
+              <div className="form-group">
+                <label className="form-label">권한</label>
+                <select className="form-select" value={editRole} onChange={(e) => setEditRole(e.target.value as AdminRole)}>
+                  <option value="super">슈퍼 관리자</option>
+                  <option value="finance">재정 관리자</option>
+                  <option value="member">성도 관리자</option>
+                </select>
               </div>
-              <div className="modal__content">
-                <p style={{ margin: "1rem 0" }}>
-                  이 관리자를 삭제하시겠습니까?
-                </p>
-                <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-                  삭제된 관리자는 더 이상 시스템에 로그인할 수 없습니다.
-                </p>
-              </div>
-              <div className="modal__footer">
-                <button className="btn btn--outline" onClick={() => setDeleteConfirm(null)}>
-                  취소
-                </button>
-                <button className="btn btn--danger" onClick={() => handleDelete(deleteConfirm)}>
-                  삭제
-                </button>
+              <div className="form-group">
+                <label className="form-label">표시 이름</label>
+                <input type="text" className="form-input" value={editMemberName} onChange={(e) => setEditMemberName(e.target.value)} />
               </div>
             </div>
+            <div className="modal__footer">
+              <button className="btn btn--outline" onClick={closeModal}>취소</button>
+              <button className="btn btn--primary" onClick={handleSaveEdit} disabled={isSaving}>
+                {isSaving ? "저장 중..." : "저장"}
+              </button>
+            </div>
           </div>
-        )
-      }
-    </div >
+        </div>
+      )}
+
+      {/* 삭제 확인 */}
+      {deleteConfirm && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ width: "380px" }}>
+            <div className="modal__header">
+              <h3 className="modal__title" style={{ color: "var(--danger)" }}>
+                <span className="material-symbols-outlined" style={{ verticalAlign: "bottom", marginRight: "6px" }}>warning</span>
+                관리자 삭제
+              </h3>
+              <button className="modal__close" onClick={() => setDeleteConfirm(null)}><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <div className="modal__content">
+              <p>이 관리자를 삭제하시겠습니까?</p>
+              <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginTop: "0.5rem" }}>삭제된 계정은 더 이상 로그인할 수 없습니다.</p>
+            </div>
+            <div className="modal__footer">
+              <button className="btn btn--outline" onClick={() => setDeleteConfirm(null)}>취소</button>
+              <button className="btn btn--danger" onClick={() => handleDelete(deleteConfirm)}>삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

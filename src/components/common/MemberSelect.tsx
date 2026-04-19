@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { convertFileSrc } from "@tauri-apps/api/tauri";
 
 export interface SelectMember {
   id: string;
@@ -96,14 +95,7 @@ export function MemberSelect({
     if (member.profileImage.startsWith("data:") || member.profileImage.startsWith("http")) {
       return member.profileImage;
     }
-    // Tauri specific handling - simplified since we might not have isTauriEnv/convertFileSrc everywhere available directly 
-    // or we assume this component runs in Tauri context.
-    // The import is safe.
-    try {
-      return convertFileSrc(member.profileImage);
-    } catch (e) {
-      return member.profileImage;
-    }
+    return member.profileImage;
   };
 
   return (

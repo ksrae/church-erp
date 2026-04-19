@@ -254,7 +254,7 @@ function Settings() {
 
       // 설정 초기화
       setSettings(defaultSettings);
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(defaultSettings));
+      await saveData("settings", defaultSettings);
 
       setAccounts([]);
       setShowResetConfirm(false);
@@ -313,35 +313,37 @@ function Settings() {
 
   // 설정 불러오기
   useEffect(() => {
-    const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (savedSettings) {
+    const loadSettings = async () => {
       try {
-        const parsed = JSON.parse(savedSettings);
-        // Deep merge for church settings to preserve new fields (like logo)
-        // if they don't exist in saved data
-        setSettings(prev => ({
-          ...prev,
-          ...parsed,
-          church: {
-            ...prev.church,
-            ...(parsed.church || {})
+        const saved = await loadData<SettingsData>("settings");
+        if (saved) {
+          setSettings(prev => ({
+            ...prev,
+            ...saved,
+            church: { ...prev.church, ...(saved.church || {}) },
+          }));
+        } else {
+          // localStorage 폴백 (마이그레이션)
+          const localSaved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+          if (localSaved) {
+            try {
+              const parsed = JSON.parse(localSaved);
+              setSettings(prev => ({ ...prev, ...parsed, church: { ...prev.church, ...(parsed.church || {}) } }));
+            } catch { /* ignore */ }
           }
-        }));
-      } catch {
-        // 파싱 에러 시 기본값 사용
-      }
-    }
-    // Load current currency setting
-    const currentCurrency = getCurrentCurrencyCode();
-    setSettings(prev => ({ ...prev, currency: currentCurrency }));
+        }
+      } catch { /* ignore */ }
+      const currentCurrency = getCurrentCurrencyCode();
+      setSettings(prev => ({ ...prev, currency: currentCurrency }));
+    };
+    loadSettings();
   }, []);
 
   // 설정 저장
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // 로컬 스토리지에 저장
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+      await saveData("settings", settings);
 
       // Log activity
       await logActivity(

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { loadData, saveData } from "../utils/fileStorage";
+// Firestore 기반으로 전환됨 (fileStorage.ts 내부에서 처리)
 
 
 const MEMBERS_STORAGE_KEY = "church_erp_members";

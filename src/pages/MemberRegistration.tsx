@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DaumPostcode from "react-daum-postcode";
-import { convertFileSrc } from "@tauri-apps/api/tauri";
-import { loadData, saveData, saveImage, isTauriEnv } from "../utils/fileStorage";
-// removed original non-tauri imports
+import { loadData, saveData, uploadFile } from "../utils/fileStorage";
 import { CustomSelect } from "../components/common/CustomSelect";
 import { MemberSelect } from "../components/common/MemberSelect";
 const MEMBERS_STORAGE_KEY = "church_erp_members";
@@ -160,13 +158,7 @@ function MemberRegistration() {
           });
 
           if (member.profileImage) {
-            if (member.profileImage.startsWith('data:') || member.profileImage.startsWith('http')) {
-              setPreviewImage(member.profileImage);
-            } else if (isTauriEnv()) {
-              setPreviewImage(convertFileSrc(member.profileImage));
-            } else {
-              setPreviewImage(member.profileImage);
-            }
+            setPreviewImage(member.profileImage);
           }
         }
       } catch (e) {
@@ -288,29 +280,17 @@ function MemberRegistration() {
     console.log("Submitting form:", formData, "Name:", currentName);
 
     try {
-      // 1. 이미지 저장
+      // 1. 이미지 업로드 (Firebase Storage)
       let imagePath = "";
       if (selectedFile) {
         try {
           setSubmitStatus("이미지 업로드 중...");
-          console.log("Saving image...");
-          const buffer = await selectedFile.arrayBuffer();
-          imagePath = await saveImage(new Uint8Array(buffer), selectedFile.name);
-          console.log("Image saved at:", imagePath);
-
-          // Browser environment fallback: ensure image is saved as Base64 if file access fails
-          if (!imagePath && !isTauriEnv() && previewImage) {
-            console.warn("Using Base64 fallback for image");
-            imagePath = previewImage;
-          }
-
-          if (!imagePath && isTauriEnv()) {
-            throw new Error("이미지 저장에 실패했습니다 (경로 반환 없음)");
-          }
+          const ext = selectedFile.name.split(".").pop() || "jpg";
+          const filename = `images/members/${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
+          imagePath = await uploadFile(selectedFile, filename);
         } catch (imgErr: any) {
-          console.error("Image save error:", imgErr);
-          const msg = typeof imgErr === 'string' ? imgErr : (imgErr.message || JSON.stringify(imgErr));
-          throw new Error(`이미지 저장 실패: ${msg}`);
+          console.error("Image upload error:", imgErr);
+          throw new Error(`이미지 업로드 실패: ${imgErr.message}`);
         }
       }
 

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
-import { convertFileSrc } from "@tauri-apps/api/tauri";
-import { loadData, saveData, isTauriEnv } from "../utils/fileStorage";
+import { loadData, saveData } from "../utils/fileStorage";
 import { LayoutOutletContext } from "../components/Layout";
 
 const MEMBERS_STORAGE_KEY = "church_erp_members";
@@ -696,11 +695,7 @@ function Members() {
                           }}>
                             {member.profileImage ? (
                               <img
-                                src={
-                                  member.profileImage.startsWith('data:') || member.profileImage.startsWith('http')
-                                    ? member.profileImage
-                                    : (isTauriEnv() ? convertFileSrc(member.profileImage) : member.profileImage)
-                                }
+                                src={member.profileImage}
                                 alt={member.name}
                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 onError={(e) => {

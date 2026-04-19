@@ -1,136 +1,114 @@
 /**
- * Admin Data Security Utility
- * - Password hashing with SHA-256 + salt
- * - Binary file storage (not readable as plain text)
+ * Church Portal - Admin Security
+ * 슈퍼유저: config/superUser.email 에 저장된 이메일과 일치
+ * 교회관리자: churchAdmins/{uid} 에 저장
  */
 
 import {
-  writeBinaryFile,
-  readBinaryFile,
-  exists,
-  createDir,
-  BaseDirectory,
-} from "@tauri-apps/api/fs";
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+} from "firebase/auth";
+import { doc, setDoc, getDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
+import { ChurchAdmin } from "../types/church";
 
-const ADMIN_FILE_PATH = "data/admins/admin.dat";
-const SALT = "church_erp_2024_secure_salt";
+const SUPER_USER_CONFIG_PATH = "config/superUser";  // DB에서 직접 수정 가능
 
-/**
- * Hash password using SHA-256 with salt
- */
-export async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + SALT);
-
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-
-  return hashHex;
+export interface AdminUser {
+  id: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  memberId: string;
+  memberName: string;
+  username: string;
+  role: "super" | "finance" | "member";
+  createdAt: string;
+  lastLogin?: string;
 }
 
-/**
- * Verify password against stored hash
- */
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const inputHash = await hashPassword(password);
-  return inputHash === hash;
-}
+export type LoginResult =
+  | { type: "super"; email: string; displayName: string; photoURL?: string; uid: string }
+  | { type: "church"; admin: ChurchAdmin }
+  | { type: "pending_license"; uid: string; email: string; displayName: string; photoURL?: string }
+  | { type: "denied" };
 
-/**
- * Encode data to binary (XOR obfuscation + Base64)
- */
-function encodeDataToBinary(data: string): Uint8Array {
-  // Simple XOR obfuscation key
-  const key = [0x4C, 0x6F, 0x72, 0x64, 0x21]; // "Lord!"
-
-  // First, Base64 encode the JSON string
-  const base64 = btoa(unescape(encodeURIComponent(data)));
-
-  // Then XOR each byte with key
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(base64);
-  const obfuscated = new Uint8Array(bytes.length);
-
-  for (let i = 0; i < bytes.length; i++) {
-    obfuscated[i] = bytes[i] ^ key[i % key.length];
-  }
-
-  return obfuscated;
-}
-
-/**
- * Decode binary data back to string
- */
-function decodeBinaryToData(binary: Uint8Array): string {
-  // XOR key (same as encode)
-  const key = [0x4C, 0x6F, 0x72, 0x64, 0x21]; // "Lord!"
-
-  // Reverse XOR
-  const deobfuscated = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    deobfuscated[i] = binary[i] ^ key[i % key.length];
-  }
-
-  // Decode from bytes to string
-  const decoder = new TextDecoder();
-  const base64 = decoder.decode(deobfuscated);
-
-  // Decode Base64
+// 슈퍼유저 이메일 조회 (config/superUser.email)
+export async function getSuperUserEmail(): Promise<string> {
   try {
-    return decodeURIComponent(escape(atob(base64)));
-  } catch {
-    throw new Error("Failed to decode admin data");
-  }
+    const snap = await getDoc(doc(db, "config", "superUser"));
+    if (snap.exists()) return snap.data().email as string;
+  } catch { /* ignore */ }
+  return "";
 }
 
-/**
- * Save admin data as encrypted binary file
- */
-export async function saveAdminData<T>(data: T): Promise<void> {
+export async function signInWithGoogle(): Promise<LoginResult> {
+  const provider = new GoogleAuthProvider();
+  const credential = await signInWithPopup(auth, provider);
+  const fbUser = credential.user;
+
+  const superEmail = await getSuperUserEmail();
+
+  // 슈퍼유저인지 확인
+  if (fbUser.email && fbUser.email.toLowerCase() === superEmail.toLowerCase()) {
+    return {
+      type: "super",
+      uid: fbUser.uid,
+      email: fbUser.email,
+      displayName: fbUser.displayName || fbUser.email,
+      photoURL: fbUser.photoURL || undefined,
+    };
+  }
+
+  // 교회 관리자인지 확인
+  const adminSnap = await getDoc(doc(db, "churchAdmins", fbUser.uid));
+  if (adminSnap.exists()) {
+    const admin = adminSnap.data() as ChurchAdmin;
+    // lastLogin 업데이트
+    const updated = { ...admin, lastLogin: new Date().toISOString(), photoURL: fbUser.photoURL || admin.photoURL };
+    await setDoc(doc(db, "churchAdmins", fbUser.uid), updated);
+    return { type: "church", admin: updated };
+  }
+
+  // 등록되지 않은 계정 → 라이선스 키 입력 대기
+  return {
+    type: "pending_license",
+    uid: fbUser.uid,
+    email: fbUser.email || "",
+    displayName: fbUser.displayName || fbUser.email || "관리자",
+    photoURL: fbUser.photoURL || undefined,
+  };
+}
+
+export async function firebaseSignOut(): Promise<void> {
+  try { await signOut(auth); } catch { /* ignore */ }
+}
+
+export async function loadChurchAdmin(uid: string): Promise<ChurchAdmin | null> {
   try {
-    // Ensure directory exists
-    const dirExists = await exists("data/admins", { dir: BaseDirectory.AppData });
-    if (!dirExists) {
-      await createDir("data/admins", { dir: BaseDirectory.AppData, recursive: true });
-    }
-
-    // Convert to JSON
-    const jsonString = JSON.stringify(data, null, 0);
-
-    // Encode to binary
-    const binaryData = encodeDataToBinary(jsonString);
-
-    // Write binary file
-    await writeBinaryFile(ADMIN_FILE_PATH, binaryData, { dir: BaseDirectory.AppData });
-
-    console.log("✅ Admin data saved securely");
-  } catch (error) {
-    console.error("❌ Failed to save admin data:", error);
-    throw error;
-  }
+    const snap = await getDoc(doc(db, "churchAdmins", uid));
+    return snap.exists() ? (snap.data() as ChurchAdmin) : null;
+  } catch { return null; }
 }
 
-/**
- * Load admin data from encrypted binary file
- */
-export async function loadAdminData<T>(): Promise<T | null> {
+export async function saveChurchAdmin(admin: ChurchAdmin): Promise<void> {
+  await setDoc(doc(db, "churchAdmins", admin.uid), admin);
+}
+
+export async function deleteChurchAdmin(uid: string): Promise<void> {
+  await deleteDoc(doc(db, "churchAdmins", uid));
+}
+
+export async function loadAllChurchAdmins(): Promise<ChurchAdmin[]> {
   try {
-    const fileExists = await exists(ADMIN_FILE_PATH, { dir: BaseDirectory.AppData });
-    if (!fileExists) {
-      return null;
-    }
-
-    // Read binary file
-    const binaryData = await readBinaryFile(ADMIN_FILE_PATH, { dir: BaseDirectory.AppData });
-
-    // Decode from binary
-    const jsonString = decodeBinaryToData(binaryData);
-
-    // Parse JSON
-    return JSON.parse(jsonString) as T;
-  } catch (error) {
-    console.error("❌ Failed to load admin data:", error);
-    return null;
-  }
+    const snap = await getDocs(collection(db, "churchAdmins"));
+    return snap.docs.map((d) => d.data() as ChurchAdmin);
+  } catch { return []; }
 }
+
+// 기존 코드 호환용 (사용 안 함)
+export async function saveAdminUser(_admin: AdminUser): Promise<void> {}
+export async function loadAdminByUid(_uid: string): Promise<AdminUser | null> { return null; }
+export async function loadAllAdmins(): Promise<AdminUser[]> { return []; }
+export async function deleteAdminUser(_id: string): Promise<void> {}

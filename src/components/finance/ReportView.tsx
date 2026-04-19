@@ -1,8 +1,4 @@
 import { ReportData } from "../../types/finance";
-import { save } from "@tauri-apps/api/dialog";
-import { writeTextFile, BaseDirectory } from "@tauri-apps/api/fs";
-import { appDataDir, join } from "@tauri-apps/api/path";
-import { invoke } from "@tauri-apps/api/tauri";
 
 interface ReportViewProps {
   reportData: ReportData;
@@ -89,28 +85,7 @@ function ReportView({
       csv += `거래 건수,,${reportData.transactionCount}\n`;
 
       const fileName = `재정보고서_${reportYear}년${reportType === "monthly" ? "_" + reportMonth + "월" : ""}.csv`;
-
-      // @ts-ignore
-      const isTauri = window.__TAURI__ !== undefined;
-
-      if (isTauri) {
-        try {
-          const filePath = await save({
-            filters: [{ name: 'CSV', extensions: ['csv'] }],
-            defaultPath: fileName
-          });
-
-          if (filePath) {
-            await writeTextFile(filePath, csv);
-            alert("파일이 성공적으로 저장되었습니다.");
-          }
-        } catch (err) {
-          console.error("Tauri save failed, falling back to browser download:", err);
-          downloadBrowser(csv, fileName);
-        }
-      } else {
-        downloadBrowser(csv, fileName);
-      }
+      downloadBrowser(csv, fileName);
     } catch (e) {
       console.error("CSV Export Error:", e);
       alert("데이터 내보내기 중 오류가 발생했습니다.");
@@ -129,53 +104,13 @@ function ReportView({
     setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
-  const handlePrint = async () => {
-    // @ts-ignore
-    const isTauri = window.__TAURI__ !== undefined;
-
-    if (!isTauri) {
-      window.print();
-      return;
-    }
-
-    try {
-      const htmlContent = generatePrintHTML();
-      const filename = `print_report_${Date.now()}.html`;
-
-      // Save temp html file in AppData
-      await writeTextFile(filename, htmlContent, { dir: BaseDirectory.AppData });
-
-      const appData = await appDataDir();
-      const filePath = await join(appData, filename);
-
-      // Use imported invoke to call custom Rust command
-      await invoke('print_file', { path: filePath });
-
-    } catch (e) {
-      console.error("Print Error:", e);
-      alert(`인쇄 기능을 실행하는 중 오류가 발생했습니다: ${e instanceof Error ? e.message : String(e)}`);
-      // Fallback
-      window.print();
-    }
+  const handlePrint = () => {
+    window.print();
   };
 
-  const generatePrintHTML = () => {
-    // 교회 정보 가져오기
-    let churchInfo = { name: "교회 관리 시스템", address: "", phone: "", logo: "" };
-    try {
-      const stored = localStorage.getItem("church_erp_settings");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.church) {
-          churchInfo = {
-            name: parsed.church.churchName || "교회 관리 시스템",
-            address: parsed.church.address || "",
-            phone: parsed.church.phone || "",
-            logo: parsed.church.logo || ""
-          };
-        }
-      }
-    } catch (e) { console.error("Failed to load church info for report", e); }
+  /* generatePrintHTML removed - web version uses window.print() directly */
+  const _unused = () => {
+    let churchInfo = { name: "", address: "", phone: "", logo: "" };
 
     const period = `${reportYear}년 ${reportType === 'monthly' ? reportMonth + '월' : ''}`;
 
