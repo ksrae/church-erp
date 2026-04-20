@@ -6,8 +6,9 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
-  WorshipSchedule, WorshipInstance,
+  WorshipSchedule, WorshipInstance, WorshipType,
   worshipTypeLabels, worshipTypeColors,
+  ONE_TIME_EVENT_TYPES, isOneTimeEvent,
 } from "../../types/worship";
 import { logActivity } from "../../utils/auditLog";
 import { useAuth } from "../../App";
@@ -66,12 +67,23 @@ function WorshipCalendar() {
   const [schedules, setSchedules] = useState<WorshipSchedule[]>([]);
   const [instances, setInstances] = useState<WorshipInstance[]>([]);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showEventModal, setShowEventModal] = useState(false);
   const [_isLoading, setIsLoading] = useState(true);
 
   const [scheduleForm, setScheduleForm] = useState<Partial<WorshipSchedule>>({
     name: "", type: "sunday",
     recurrence: { kind: "weekly", dayOfWeek: 0, time: "11:00" },
     startDate: new Date().toISOString().split("T")[0],
+  });
+
+  const [eventForm, setEventForm] = useState<Partial<WorshipInstance>>({
+    type: "event",
+    title: "",
+    date: new Date().toISOString().split("T")[0],
+    time: "",
+    location: "",
+    description: "",
+    isPublished: true,
   });
 
   useEffect(() => { loadData(); }, []);
@@ -113,6 +125,52 @@ function WorshipCalendar() {
       await logActivity("WORSHIP", "예배 일정 등록", `${data.name} 스케줄이 등록되었습니다.`);
       setShowScheduleModal(false);
     } catch (e: any) { alert(`저장 실패: ${e.message}`); }
+  };
+
+  const handleAddEvent = async () => {
+    if (!eventForm.title || !eventForm.date) {
+      alert("제목과 날짜를 입력해주세요.");
+      return;
+    }
+    try {
+      const data: Omit<WorshipInstance, "id"> = {
+        churchId,
+        date: eventForm.date!,
+        endDate: eventForm.endDate,
+        type: eventForm.type as WorshipType,
+        time: eventForm.time,
+        endTime: eventForm.endTime,
+        title: eventForm.title,
+        location: eventForm.location,
+        description: eventForm.description,
+        order: [],
+        isPublished: eventForm.isPublished !== false,
+        detailStatus: "complete",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const ref = await addDoc(collection(db, "worshipInstances"), { ...data, createdAt: serverTimestamp() });
+      setInstances((prev) => [...prev, { id: ref.id, ...data }]);
+      await logActivity("WORSHIP", "일정 등록", `${data.title} 일정이 등록되었습니다.`);
+      setShowEventModal(false);
+      setEventForm({
+        type: "event",
+        title: "",
+        date: new Date().toISOString().split("T")[0],
+        time: "",
+        location: "",
+        description: "",
+        isPublished: true,
+      });
+    } catch (e: any) { alert(`저장 실패: ${e.message}`); }
+  };
+
+  const handleDeleteInstance = async (id: string) => {
+    if (!confirm("이 일정을 삭제하시겠습니까?")) return;
+    try {
+      await deleteDoc(doc(db, "worshipInstances", id));
+      setInstances((prev) => prev.filter((i) => i.id !== id));
+    } catch (e: any) { alert(`삭제 실패: ${e.message}`); }
   };
 
   const handleDeleteSchedule = async (scheduleId: string) => {
@@ -180,10 +238,16 @@ function WorshipCalendar() {
             <h1 className="page-header__title">예배 관리</h1>
             <p className="page-header__description">예배 스케줄을 등록하고 세부 내역을 관리합니다.</p>
           </div>
-          <button className="btn btn--primary" onClick={() => setShowScheduleModal(true)}>
-            <span className="material-symbols-outlined">add</span>
-            예배 스케줄 추가
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button className="btn btn--outline" onClick={() => setShowEventModal(true)}>
+              <span className="material-symbols-outlined">event</span>
+              행사/이벤트 추가
+            </button>
+            <button className="btn btn--primary" onClick={() => setShowScheduleModal(true)}>
+              <span className="material-symbols-outlined">add</span>
+              예배 스케줄 추가
+            </button>
+          </div>
         </div>
       </div>
 
@@ -252,23 +316,29 @@ function WorshipCalendar() {
                   </div>
                 ))}
 
-                {dayInst.map((inst) => (
-                  <div
-                    key={inst.id}
-                    onClick={() => navigate(`/worship/${inst.id}`)}
-                    style={{
-                      fontSize: "0.7rem", padding: "2px 4px", borderRadius: "4px", marginBottom: "2px",
-                      background: worshipTypeColors[inst.type] + "22", color: worshipTypeColors[inst.type],
-                      border: `1px solid ${worshipTypeColors[inst.type]}66`,
-                      cursor: "pointer", display: "flex", alignItems: "center", gap: "2px",
-                    }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: "0.7rem" }}>
-                      {inst.detailStatus === "complete" ? "check_circle" : inst.detailStatus === "partial" ? "pending" : "radio_button_unchecked"}
-                    </span>
-                    {inst.title || worshipTypeLabels[inst.type]}
-                  </div>
-                ))}
+                {dayInst.map((inst) => {
+                  const oneTime = isOneTimeEvent(inst.type);
+                  return (
+                    <div
+                      key={inst.id}
+                      onClick={() => oneTime ? null : navigate(`/admin/church/worship/${inst.id}`)}
+                      style={{
+                        fontSize: "0.7rem", padding: "2px 4px", borderRadius: "4px", marginBottom: "2px",
+                        background: worshipTypeColors[inst.type] + "22", color: worshipTypeColors[inst.type],
+                        border: `1px solid ${worshipTypeColors[inst.type]}66`,
+                        cursor: oneTime ? "default" : "pointer", display: "flex", alignItems: "center", gap: "2px",
+                      }}
+                      title={oneTime ? "일정" : "예배 세부 내역"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: "0.7rem" }}>
+                        {oneTime ? "event" : inst.detailStatus === "complete" ? "check_circle" : inst.detailStatus === "partial" ? "pending" : "radio_button_unchecked"}
+                      </span>
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {inst.title || worshipTypeLabels[inst.type]}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
@@ -317,6 +387,133 @@ function WorshipCalendar() {
           )}
         </div>
       </div>
+
+      {/* One-time events list */}
+      <div style={{ marginTop: "1.5rem" }}>
+        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>등록된 행사/이벤트</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          {(() => {
+            const events = instances
+              .filter((i) => isOneTimeEvent(i.type))
+              .sort((a, b) => a.date.localeCompare(b.date));
+            if (events.length === 0) {
+              return (
+                <div className="form-card" style={{ textAlign: "center", padding: "1.5rem", color: "var(--text-secondary)" }}>
+                  <p style={{ margin: 0 }}>등록된 행사가 없습니다.</p>
+                </div>
+              );
+            }
+            return events.map((ev) => (
+              <div key={ev.id} className="form-card" style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                <div style={{ width: "0.5rem", height: "3rem", borderRadius: "4px", background: worshipTypeColors[ev.type], flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+                    {ev.title}
+                    {!ev.isPublished && <span style={{ marginLeft: "0.5rem", fontSize: "0.7rem", padding: "2px 6px", background: "#fef3c7", color: "#92400e", borderRadius: "4px" }}>비공개</span>}
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                    <span>{worshipTypeLabels[ev.type]}</span>
+                    <span>•</span>
+                    <span>{ev.date}{ev.endDate ? ` ~ ${ev.endDate}` : ""}</span>
+                    {ev.time && <><span>•</span><span>{ev.time}{ev.endTime ? `~${ev.endTime}` : ""}</span></>}
+                    {ev.location && <><span>•</span><span>📍 {ev.location}</span></>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDeleteInstance(ev.id)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}
+                  title="삭제"
+                >
+                  <span className="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            ));
+          })()}
+        </div>
+      </div>
+
+      {/* Event Add Modal (one-time events) */}
+      {showEventModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ width: "560px" }}>
+            <div className="modal__header">
+              <h3 className="modal__title">행사/이벤트 추가</h3>
+              <button className="modal__close" onClick={() => setShowEventModal(false)}><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <div className="modal__content">
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">유형 *</label>
+                  <select className="form-select" value={eventForm.type} onChange={(e) => setEventForm((p) => ({ ...p, type: e.target.value as WorshipType }))}>
+                    {ONE_TIME_EVENT_TYPES.map((t) => (
+                      <option key={t} value={t}>{worshipTypeLabels[t]}</option>
+                    ))}
+                    <option value="special">특별예배</option>
+                    <option value="other">기타</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">공개</label>
+                  <select className="form-select" value={eventForm.isPublished ? "true" : "false"} onChange={(e) => setEventForm((p) => ({ ...p, isPublished: e.target.value === "true" }))}>
+                    <option value="true">공개 (포탈 노출)</option>
+                    <option value="false">비공개</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">제목 *</label>
+                <input type="text" className="form-input" placeholder="예: 봄 부흥회"
+                  value={eventForm.title || ""}
+                  onChange={(e) => setEventForm((p) => ({ ...p, title: e.target.value }))} />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">시작일 *</label>
+                  <input type="date" className="form-input" value={eventForm.date || ""} onChange={(e) => setEventForm((p) => ({ ...p, date: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">종료일 (선택, 다일 일정)</label>
+                  <input type="date" className="form-input" value={eventForm.endDate || ""} onChange={(e) => setEventForm((p) => ({ ...p, endDate: e.target.value || undefined }))} />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">시작 시간</label>
+                  <input type="time" className="form-input" value={eventForm.time || ""} onChange={(e) => setEventForm((p) => ({ ...p, time: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">종료 시간</label>
+                  <input type="time" className="form-input" value={eventForm.endTime || ""} onChange={(e) => setEventForm((p) => ({ ...p, endTime: e.target.value }))} />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">장소</label>
+                <input type="text" className="form-input" placeholder="예: 본당 3층 예배실"
+                  value={eventForm.location || ""}
+                  onChange={(e) => setEventForm((p) => ({ ...p, location: e.target.value }))} />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">설명</label>
+                <textarea className="form-input" rows={3}
+                  placeholder="일정 상세 내용을 입력하세요."
+                  value={eventForm.description || ""}
+                  onChange={(e) => setEventForm((p) => ({ ...p, description: e.target.value }))}
+                  style={{ resize: "vertical", fontFamily: "inherit" }}
+                />
+              </div>
+            </div>
+            <div className="modal__footer">
+              <button className="btn btn--outline" onClick={() => setShowEventModal(false)}>취소</button>
+              <button className="btn btn--primary" onClick={handleAddEvent}>저장</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Schedule Add Modal */}
       {showScheduleModal && (

@@ -1,39 +1,39 @@
 import { useState, useEffect } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useMyChurchId } from "../../components/RequireMyChurch";
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  date: string;
-  eventEndDate?: string;
-  time: string;
-  endTime?: string;
-  description: string;
-  category: "worship" | "meeting" | "event" | "other";
-  repeat: "none" | "weekly" | "monthly" | "yearly";
-}
-
-const categoryColors: Record<string, { bg: string; text: string; label: string }> = {
-  worship: { bg: "#dbeafe", text: "#1d4ed8", label: "예배" },
-  meeting: { bg: "#dcfce7", text: "#16a34a", label: "모임" },
-  event: { bg: "#fef3c7", text: "#d97706", label: "행사" },
-  other: { bg: "#f3e8ff", text: "#7c3aed", label: "기타" },
-};
+import { WorshipInstance, worshipTypeLabels, worshipTypeColors, isOneTimeEvent } from "../../types/worship";
+import { Church } from "../../types/church";
 
 function Schedule() {
   const myChurchId = useMyChurchId();
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [church, setChurch] = useState<Church | null>(null);
+  const [events, setEvents] = useState<WorshipInstance[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
+  const [selected, setSelected] = useState<WorshipInstance | null>(null);
 
   useEffect(() => {
     if (!myChurchId) return;
     (async () => {
+      setIsLoading(true);
       try {
-        const snap = await getDoc(doc(db, "churchData", myChurchId, "events"));
-        if (snap.exists()) setEvents((snap.data().value as CalendarEvent[]) || []);
+        const chSnap = await getDoc(doc(db, "churches", myChurchId));
+        const ch = chSnap.exists() ? ({ id: chSnap.id, ...chSnap.data() } as Church) : null;
+        setChurch(ch);
+
+        if (ch && ch.showSchedule === false) {
+          setEvents([]);
+        } else {
+          const snap = await getDocs(query(
+            collection(db, "worshipInstances"),
+            where("churchId", "==", myChurchId),
+            where("isPublished", "==", true),
+          ));
+          const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as WorshipInstance));
+          // Portal schedule: show one-time events (worship recurring instances excluded here)
+          setEvents(all.filter((i) => isOneTimeEvent(i.type)));
+        }
       } catch (e) { console.error(e); }
       setIsLoading(false);
     })();
@@ -56,14 +56,7 @@ function Schedule() {
   const getEventsForDate = (dateStr: string) => {
     return events.filter((e) => {
       if (e.date === dateStr) return true;
-      if (e.repeat === "none" && e.eventEndDate) return dateStr >= e.date && dateStr <= e.eventEndDate;
-      if (e.repeat !== "none") {
-        const ed = new Date(e.date);
-        const cd = new Date(dateStr);
-        if (e.repeat === "weekly") return ed.getDay() === cd.getDay() && cd >= ed;
-        if (e.repeat === "monthly") return ed.getDate() === cd.getDate() && cd >= ed;
-        if (e.repeat === "yearly") return ed.getMonth() === cd.getMonth() && ed.getDate() === cd.getDate() && cd >= ed;
-      }
+      if (e.endDate) return dateStr >= e.date && dateStr <= e.endDate;
       return false;
     });
   };
@@ -74,15 +67,26 @@ function Schedule() {
 
   const monthEvents = events.filter((e) => {
     const m = `${year}-${String(month + 1).padStart(2, "0")}`;
-    return e.date.startsWith(m);
+    return e.date.startsWith(m) || (e.endDate && e.endDate.startsWith(m));
   }).sort((a, b) => a.date.localeCompare(b.date));
+
+  if (church && church.showSchedule === false) {
+    return (
+      <div className="portal-page-container">
+        <div style={{ padding: "3rem", textAlign: "center", background: "white", border: "1px solid #e2e8f0", borderRadius: "16px", color: "#64748b" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: "2.5rem", color: "#cbd5e1" }}>event_busy</span>
+          <p style={{ marginTop: "0.75rem", fontSize: "0.95rem" }}>이 교회는 아직 일정을 공개하지 않았습니다.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="portal-page-container">
       <div style={{ marginBottom: "1.5rem" }}>
         <p style={{ fontSize: "0.75rem", color: "#3b82f6", fontWeight: 700, letterSpacing: "0.1em", margin: 0 }}>SCHEDULE</p>
         <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a", margin: "0.25rem 0 0.5rem", letterSpacing: "-0.02em" }}>교회 일정</h1>
-        <p style={{ color: "#64748b" }}>예배, 모임, 행사 일정을 확인하세요.</p>
+        <p style={{ color: "#64748b" }}>공개된 행사 및 이벤트 일정을 확인하세요.</p>
       </div>
 
       {/* Calendar */}
@@ -114,8 +118,12 @@ function Schedule() {
                   {day.date.getDate()}
                 </div>
                 {dayEvents.slice(0, 2).map((e) => (
-                  <div key={e.id} style={{ fontSize: "0.65rem", padding: "1px 4px", borderRadius: "3px", marginBottom: "2px", background: categoryColors[e.category].bg, color: categoryColors[e.category].text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {e.title}
+                  <div
+                    key={e.id}
+                    onClick={() => setSelected(e)}
+                    style={{ fontSize: "0.65rem", padding: "1px 4px", borderRadius: "3px", marginBottom: "2px", background: worshipTypeColors[e.type] + "22", color: worshipTypeColors[e.type], overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }}
+                  >
+                    {e.title || worshipTypeLabels[e.type]}
                   </div>
                 ))}
                 {dayEvents.length > 2 && <div style={{ fontSize: "0.65rem", color: "#94a3b8" }}>+{dayEvents.length - 2}</div>}
@@ -134,31 +142,88 @@ function Schedule() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {monthEvents.map((e) => (
-            <div key={e.id} style={{ background: "white", borderRadius: "0.875rem", padding: "1rem 1.25rem", border: "1px solid #e2e8f0", display: "flex", gap: "1rem", alignItems: "flex-start" }}>
+            <button
+              key={e.id}
+              onClick={() => setSelected(e)}
+              style={{ textAlign: "left", background: "white", borderRadius: "0.875rem", padding: "1rem 1.25rem", border: "1px solid #e2e8f0", display: "flex", gap: "1rem", alignItems: "flex-start", cursor: "pointer", width: "100%" }}
+            >
               <div style={{ textAlign: "center", minWidth: "2.5rem" }}>
                 <div style={{ fontWeight: 700, fontSize: "1.25rem", color: "#16649c", lineHeight: 1 }}>{new Date(e.date).getDate()}</div>
                 <div style={{ fontSize: "0.7rem", color: "#94a3b8" }}>{weekDays[new Date(e.date).getDay()]}</div>
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.25rem" }}>
-                  <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: "12px", background: categoryColors[e.category].bg, color: categoryColors[e.category].text, fontWeight: 600 }}>
-                    {categoryColors[e.category].label}
+                  <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: "12px", background: worshipTypeColors[e.type] + "22", color: worshipTypeColors[e.type], fontWeight: 600 }}>
+                    {worshipTypeLabels[e.type]}
                   </span>
-                  {e.repeat !== "none" && (
-                    <span style={{ fontSize: "0.75rem", color: "#94a3b8", display: "flex", alignItems: "center", gap: "2px" }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: "0.875rem" }}>repeat</span>
-                      {e.repeat === "weekly" ? "매주" : e.repeat === "monthly" ? "매월" : "매년"}
-                    </span>
+                  {e.endDate && e.endDate !== e.date && (
+                    <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>~ {e.endDate}</span>
                   )}
                 </div>
-                <p style={{ fontWeight: 600, color: "#1e293b", marginBottom: "0.25rem" }}>{e.title}</p>
-                <p style={{ fontSize: "0.8rem", color: "#64748b" }}>{e.time}{e.endTime ? ` ~ ${e.endTime}` : ""}</p>
-                {e.description && <p style={{ fontSize: "0.8rem", color: "#94a3b8", marginTop: "0.25rem" }}>{e.description}</p>}
+                <p style={{ fontWeight: 600, color: "#1e293b", margin: "0 0 0.25rem" }}>{e.title || worshipTypeLabels[e.type]}</p>
+                <p style={{ fontSize: "0.8rem", color: "#64748b", margin: 0 }}>
+                  {e.time}{e.endTime ? ` ~ ${e.endTime}` : ""}
+                  {e.location && <span style={{ marginLeft: "0.5rem" }}>· {e.location}</span>}
+                </p>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
+
+      {selected && <EventModal event={selected} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}
+
+function EventModal({ event, onClose }: { event: WorshipInstance; onClose: () => void }) {
+  const color = worshipTypeColors[event.type];
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "white", borderRadius: "16px", maxWidth: "520px", width: "100%", maxHeight: "90vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "0.75rem", padding: "2px 10px", borderRadius: "12px", background: color + "22", color, fontWeight: 700 }}>
+              {worshipTypeLabels[event.type]}
+            </span>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}>
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div style={{ padding: "1.25rem 1.5rem" }}>
+          <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", margin: "0 0 1rem" }}>
+            {event.title || worshipTypeLabels[event.type]}
+          </h2>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem", marginBottom: "1rem" }}>
+            <DetailRow icon="event" label="날짜" value={event.endDate && event.endDate !== event.date ? `${event.date} ~ ${event.endDate}` : event.date} />
+            {(event.time || event.endTime) && (
+              <DetailRow icon="schedule" label="시간" value={`${event.time || ""}${event.endTime ? ` ~ ${event.endTime}` : ""}`} />
+            )}
+            {event.location && <DetailRow icon="place" label="장소" value={event.location} />}
+            {event.preacher && <DetailRow icon="person" label="강사/인도" value={event.preacher} />}
+          </div>
+
+          {event.description && (
+            <div style={{ padding: "1rem", background: "#f8fafc", borderRadius: "10px", color: "#475569", fontSize: "0.9rem", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+              {event.description}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
+      <span className="material-symbols-outlined" style={{ color: "#16649c", fontSize: "1.1rem", marginTop: "1px" }}>{icon}</span>
+      <div>
+        <p style={{ fontSize: "0.7rem", color: "#94a3b8", margin: 0, fontWeight: 600, letterSpacing: "0.05em" }}>{label.toUpperCase()}</p>
+        <p style={{ fontSize: "0.9rem", color: "#0f172a", margin: "2px 0 0", fontWeight: 500 }}>{value}</p>
+      </div>
     </div>
   );
 }

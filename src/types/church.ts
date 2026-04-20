@@ -10,12 +10,20 @@ export interface Church {
   address?: string;
   phone?: string;
   email?: string;
-  logo?: string;
   website?: string;
   description?: string;
   pastorMemberId?: string;
   memberAdminMemberId?: string;
   financeAdminMemberId?: string;
+
+  // 포탈에 노출되는 교회 브랜딩 ------------------------------------------------
+  logo?: string;              // 교회 로고 (Firebase Storage URL)
+  photos?: string[];          // 교회 소개 사진 (Firebase Storage URL 배열) - 자동 슬라이드
+  tagline?: string;           // 포탈 hero에 노출되는 한 줄 소개
+
+  // 포탈 노출 여부 토글 ------------------------------------------------------
+  showAnnouncements?: boolean;  // 공지사항 포탈 공개
+  showSchedule?: boolean;       // 캘린더 포탈 공개
 }
 
 export interface ChurchAdmin {
@@ -26,48 +34,4 @@ export interface ChurchAdmin {
   churchId: string;
   createdAt: string;
   lastLogin?: string;
-}
-
-export interface PortalPost {
-  id: string;
-  title: string;
-  content: string;
-  type: "notice" | "news" | "event" | "sermon";
-  imageUrl?: string;
-  linkUrl?: string;
-  churchId?: string;
-  churchName?: string;
-  isPublished: boolean;
-  isPinned: boolean;
-  isFeatured?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export const portalPostTypeLabels: Record<PortalPost["type"], string> = {
-  notice: "공지",
-  news: "뉴스",
-  event: "행사",
-  sermon: "말씀",
-};
-
-export const portalPostTypeColors: Record<PortalPost["type"], { bg: string; text: string }> = {
-  notice: { bg: "#dbeafe", text: "#1d4ed8" },
-  news: { bg: "#dcfce7", text: "#16a34a" },
-  event: { bg: "#fef3c7", text: "#d97706" },
-  sermon: { bg: "#f3e8ff", text: "#7c3aed" },
-};
-
-export interface PortalHero {
-  id: string;
-  title: string;
-  subtitle?: string;
-  imageUrl: string;
-  linkUrl?: string;
-  ctaLabel?: string;
-  order: number;
-  isActive: boolean;
-  overlayColor?: string;
-  createdAt: string;
-  updatedAt: string;
 }

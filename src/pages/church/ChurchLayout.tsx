@@ -29,6 +29,7 @@ function ChurchLayout() {
     { path: "/admin/church/finance", icon: "account_balance_wallet", label: "재정/회계" },
     { path: "/admin/church/worship", icon: "church", label: "예배 관리" },
     { path: "/admin/church/announcements", icon: "campaign", label: "공지/소식" },
+    { path: "/admin/church/portal", icon: "public", label: "교회 포탈 페이지" },
     { path: "/admin/church/notifications", icon: "notifications", label: "알림" },
     { path: "/admin/church/settings", icon: "settings", label: "설정" },
   ];

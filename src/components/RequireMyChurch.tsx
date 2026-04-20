@@ -5,13 +5,34 @@ import { db } from "../firebase";
 import { Church } from "../types/church";
 
 export const MY_CHURCH_KEY = "church_portal_my_church";
+export const MY_CHURCH_CHANGED_KEY = "church_portal_my_church_changed";
+
+function todayISO(): string {
+  return new Date().toISOString().split("T")[0];
+}
 
 export function getMyChurchId(): string | null {
   return localStorage.getItem(MY_CHURCH_KEY);
 }
 
+export function getLastChangeDate(): string | null {
+  return localStorage.getItem(MY_CHURCH_CHANGED_KEY);
+}
+
+// 오늘 이미 교회를 변경했는지 (최초 선택은 제한 없음)
+export function canChangeToday(): boolean {
+  const last = getLastChangeDate();
+  if (!last) return true;
+  return last !== todayISO();
+}
+
 export function setMyChurchId(id: string): void {
+  const previous = getMyChurchId();
   localStorage.setItem(MY_CHURCH_KEY, id);
+  // 실제로 바뀐 경우에만 변경일을 기록 (같은 교회 재선택은 변경으로 보지 않음)
+  if (previous && previous !== id) {
+    localStorage.setItem(MY_CHURCH_CHANGED_KEY, todayISO());
+  }
   window.dispatchEvent(new Event("mychurch:changed"));
 }
 
@@ -57,6 +78,10 @@ export function ChurchFinder({ inline, hint }: ChurchFinderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const myChurchId = useMyChurchId();
+  const hasPrior = !!myChurchId;
+  const allowedToday = canChangeToday();
+
   useEffect(() => {
     (async () => {
       try {
@@ -78,6 +103,11 @@ export function ChurchFinder({ inline, hint }: ChurchFinderProps) {
   });
 
   const handleSelect = (c: Church) => {
+    // 이미 내 교회가 있고, 다른 교회로 바꾸려는데 오늘 이미 바꾼 경우 차단
+    if (hasPrior && c.id !== myChurchId && !allowedToday) {
+      alert("교회는 같은 날 하루에 한 번만 변경할 수 있습니다. 내일 다시 시도해주세요.");
+      return;
+    }
     setMyChurchId(c.id);
     if (!inline) navigate(location.state?.returnTo || "/");
   };
@@ -87,14 +117,19 @@ export function ChurchFinder({ inline, hint }: ChurchFinderProps) {
       <div style={{ marginBottom: "1.5rem" }}>
         <p style={{ fontSize: "0.75rem", color: "#3b82f6", fontWeight: 700, letterSpacing: "0.1em", margin: 0 }}>FIND YOUR CHURCH</p>
         <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a", margin: "0.25rem 0 0.5rem", letterSpacing: "-0.02em" }}>
-          {hint ? hint : "먼저 내 교회를 선택해주세요"}
+          {hint ? hint : hasPrior ? "교회 변경" : "먼저 내 교회를 선택해주세요"}
         </h1>
         <p style={{ color: "#64748b", margin: 0 }}>
-          주보·공지·일정은 선택하신 교회의 정보를 보여드립니다. 교회는 언제든 변경할 수 있습니다.
+          내 교회를 설정하면 다음부터 포탈 접속 시 바로 교회 페이지를 확인할 수 있습니다.
+          {hasPrior && " 교회는 하루에 한 번만 변경할 수 있습니다."}
         </p>
+        {hasPrior && !allowedToday && (
+          <div style={{ marginTop: "0.75rem", padding: "0.75rem 1rem", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", color: "#b91c1c", fontSize: "0.875rem" }}>
+            오늘 이미 교회를 변경했습니다. 다른 교회로의 변경은 내일부터 가능합니다.
+          </div>
+        )}
       </div>
 
-      {/* 검색 바 */}
       <div style={{ position: "relative", marginBottom: "1.5rem" }}>
         <span className="material-symbols-outlined" style={{ position: "absolute", top: "50%", left: "1rem", transform: "translateY(-50%)", color: "#94a3b8", fontSize: "1.25rem", pointerEvents: "none" }}>search</span>
         <input
@@ -132,32 +167,55 @@ export function ChurchFinder({ inline, hint }: ChurchFinderProps) {
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "0.875rem" }}>
-          {filtered.map((c) => (
-            <button key={c.id} onClick={() => handleSelect(c)}
-                    style={{ textAlign: "left", background: "white", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "1.25rem", cursor: "pointer", transition: "all 0.15s", display: "flex", flexDirection: "column", gap: "0.625rem" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#16649c"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(22,100,156,0.12)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.boxShadow = "none"; }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <div style={{ width: "2.75rem", height: "2.75rem", borderRadius: "10px", background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span className="material-symbols-outlined" style={{ color: "#16649c", fontSize: "1.375rem" }}>church</span>
+          {filtered.map((c) => {
+            const isCurrent = c.id === myChurchId;
+            const disabled = hasPrior && !isCurrent && !allowedToday;
+            return (
+              <button
+                key={c.id}
+                onClick={() => handleSelect(c)}
+                disabled={disabled}
+                style={{
+                  textAlign: "left",
+                  background: isCurrent ? "#eff6ff" : "white",
+                  border: isCurrent ? "2px solid #16649c" : "1px solid #e2e8f0",
+                  borderRadius: "14px", padding: "1.25rem",
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  opacity: disabled ? 0.5 : 1,
+                  transition: "all 0.15s", display: "flex", flexDirection: "column", gap: "0.625rem",
+                }}
+                onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.borderColor = "#16649c"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(22,100,156,0.12)"; } }}
+                onMouseLeave={(e) => { if (!disabled) { e.currentTarget.style.borderColor = isCurrent ? "#16649c" : "#e2e8f0"; e.currentTarget.style.boxShadow = "none"; } }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  {c.logo ? (
+                    <img src={c.logo} alt="" style={{ width: "2.75rem", height: "2.75rem", borderRadius: "10px", objectFit: "cover", background: "#eff6ff" }} />
+                  ) : (
+                    <div style={{ width: "2.75rem", height: "2.75rem", borderRadius: "10px", background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span className="material-symbols-outlined" style={{ color: "#16649c", fontSize: "1.375rem" }}>church</span>
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: 800, fontSize: "1rem", color: "#0f172a", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</p>
+                    {c.pastorName && <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "2px 0 0" }}>담임 {c.pastorName}</p>}
+                  </div>
+                  {isCurrent && <span className="material-symbols-outlined" style={{ color: "#16649c" }}>check_circle</span>}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontWeight: 800, fontSize: "1rem", color: "#0f172a", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</p>
-                  {c.pastorName && <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "2px 0 0" }}>담임 {c.pastorName}</p>}
-                </div>
-              </div>
-              {c.address && (
-                <p style={{ fontSize: "0.78rem", color: "#94a3b8", margin: 0, display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>location_on</span>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.address}</span>
-                </p>
-              )}
-              <div style={{ marginTop: "auto", paddingTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.25rem", color: "#16649c", fontWeight: 600, fontSize: "0.85rem" }}>
-                이 교회 선택하기
-                <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>arrow_forward</span>
-              </div>
-            </button>
-          ))}
+                {c.address && (
+                  <p style={{ fontSize: "0.78rem", color: "#94a3b8", margin: 0, display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>location_on</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.address}</span>
+                  </p>
+                )}
+                {!isCurrent && (
+                  <div style={{ marginTop: "auto", paddingTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.25rem", color: disabled ? "#94a3b8" : "#16649c", fontWeight: 600, fontSize: "0.85rem" }}>
+                    {disabled ? "오늘 변경 불가" : hasPrior ? "이 교회로 변경" : "이 교회 선택하기"}
+                    <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>arrow_forward</span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

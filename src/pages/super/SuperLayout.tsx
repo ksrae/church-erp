@@ -16,7 +16,6 @@ function SuperLayout() {
   const navItems = [
     { path: "/admin/super/dashboard", icon: "dashboard", label: "대시보드" },
     { path: "/admin/super/churches", icon: "business", label: "교회 관리" },
-    { path: "/admin/super/portal", icon: "newspaper", label: "포탈 관리" },
   ];
 
   return (

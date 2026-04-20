@@ -1,0 +1,17 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 교회 브랜딩 자산 (로고, 사진) - 공개 읽기, 인증된 사용자만 쓰기
+    match /churches/{churchId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 공지사항 첨부 등 기타 자산 - 인증 필요
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

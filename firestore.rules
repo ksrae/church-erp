@@ -9,7 +9,7 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    // 교회 목록 - 공개 읽기 (포탈에서 교회 목록 표시)
+    // 교회 목록 - 공개 읽기 (포탈에서 교회 목록/브랜딩 표시)
     match /churches/{churchId} {
       allow read: if true;
       allow write: if request.auth != null;
@@ -21,20 +21,7 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    // 포탈 게시물 (슈퍼유저 작성) - 게시된 것은 공개
-    match /portalPosts/{postId} {
-      allow read: if resource.data.isPublished == true || request.auth != null;
-      allow write: if request.auth != null;
-    }
-
-    // 포탈 Hero 배너 (슈퍼유저 작성) - 활성화된 것은 공개
-    match /portalHeroes/{heroId} {
-      allow read: if resource.data.isActive == true || request.auth != null;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null;
-    }
-
-    // 예배 인스턴스 - 공개된 것은 포탈에서 읽기 가능
+    // 예배/일정 인스턴스 - 공개된 것은 포탈에서 읽기 가능
     match /worshipInstances/{doc} {
       allow read: if resource.data.isPublished == true || request.auth != null;
       allow write: if request.auth != null;
@@ -56,15 +43,9 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
-    // 예배 스케줄
+    // 예배 스케줄 (반복 예배 정의)
     match /worshipSchedules/{doc} {
       allow read: if true;
-      allow write: if request.auth != null;
-    }
-
-    // 뉴스 RSS 피드 소스 (슈퍼유저 관리) - 활성화된 것은 공개 읽기
-    match /newsSources/{doc} {
-      allow read: if resource.data.enabled == true || request.auth != null;
       allow write: if request.auth != null;
     }
   }

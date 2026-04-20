@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, orderBy, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { Announcement, categoryLabels, categoryColors, AnnouncementCategory } from "../../types/announcement";
 import { useMyChurchId } from "../../components/RequireMyChurch";
+import { Church } from "../../types/church";
 
 function Notices() {
   const myChurchId = useMyChurchId();
+  const [church, setChurch] = useState<Church | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -24,6 +26,16 @@ function Notices() {
     if (!myChurchId) return;
     setIsLoading(true);
     try {
+      const chSnap = await getDoc(doc(db, "churches", myChurchId));
+      const ch = chSnap.exists() ? ({ id: chSnap.id, ...chSnap.data() } as Church) : null;
+      setChurch(ch);
+
+      if (ch && ch.showAnnouncements === false) {
+        setAnnouncements([]);
+        setIsLoading(false);
+        return;
+      }
+
       const today = new Date().toISOString().split("T")[0];
       const q = query(
         collection(db, "announcements"),
@@ -43,6 +55,17 @@ function Notices() {
   const selected = selectedId ? announcements.find((a) => a.id === selectedId) : null;
 
   const categories: (AnnouncementCategory | "all")[] = ["all", "notice", "education", "event", "pastoral", "other"];
+
+  if (church && church.showAnnouncements === false) {
+    return (
+      <div className="portal-page-container">
+        <div style={{ padding: "3rem", textAlign: "center", background: "white", border: "1px solid #e2e8f0", borderRadius: "16px", color: "#64748b" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: "2.5rem", color: "#cbd5e1" }}>notifications_off</span>
+          <p style={{ marginTop: "0.75rem", fontSize: "0.95rem" }}>이 교회는 아직 공지사항을 공개하지 않았습니다.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (selected) {
     return (

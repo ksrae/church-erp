@@ -9,7 +9,6 @@ import { ChurchAdmin } from "./types/church";
 // ── 포탈 페이지 (공개) ──
 import PortalLayout from "./pages/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
-import PortalBulletins from "./pages/portal/Bulletins";
 import PortalNotices from "./pages/portal/Notices";
 import PortalSchedule from "./pages/portal/Schedule";
 import { RequireMyChurch, ChurchFinder } from "./components/RequireMyChurch";
@@ -21,12 +20,12 @@ import AdminLogin from "./pages/admin/AdminLogin";
 import SuperLayout from "./pages/super/SuperLayout";
 import SuperDashboard from "./pages/super/SuperDashboard";
 import SuperChurches from "./pages/super/Churches";
-import SuperPortalPosts from "./pages/super/PortalPosts";
 
 // ── 교회 관리자 ──
 import LicenseSetup from "./pages/church/LicenseSetup";
 import ChurchLayout from "./pages/church/ChurchLayout";
 import ChurchDashboard from "./pages/church/ChurchDashboard";
+import ChurchPortalSettings from "./pages/church/ChurchPortalSettings";
 import Members from "./pages/Members";
 import MemberRegistration from "./pages/MemberRegistration";
 import Finance from "./pages/Finance";
@@ -148,7 +147,6 @@ function App() {
           <Route path="/" element={<PortalLayout />}>
             <Route index element={<PortalHome />} />
             <Route path="churches" element={<ChurchFinder />} />
-            <Route path="bulletins" element={<RequireMyChurch hint="주보를 보려면 먼저 내 교회를 선택하세요"><PortalBulletins /></RequireMyChurch>} />
             <Route path="notices" element={<RequireMyChurch hint="교회 소식을 보려면 먼저 내 교회를 선택하세요"><PortalNotices /></RequireMyChurch>} />
             <Route path="schedule" element={<RequireMyChurch hint="교회 일정을 보려면 먼저 내 교회를 선택하세요"><PortalSchedule /></RequireMyChurch>} />
           </Route>
@@ -179,7 +177,6 @@ function App() {
             <Route index element={<Navigate to="/admin/super/dashboard" replace />} />
             <Route path="dashboard" element={<SuperDashboard />} />
             <Route path="churches" element={<SuperChurches />} />
-            <Route path="portal" element={<SuperPortalPosts />} />
           </Route>
 
           {/* ── 교회 관리자 ── */}
@@ -194,6 +191,7 @@ function App() {
             <Route path="announcements" element={<Announcements />} />
             <Route path="announcements/new" element={<AnnouncementEdit />} />
             <Route path="announcements/edit/:id" element={<AnnouncementEdit />} />
+            <Route path="portal" element={<ChurchPortalSettings />} />
             <Route path="settings" element={<Settings />} />
             <Route path="notifications" element={<Notifications />} />
           </Route>

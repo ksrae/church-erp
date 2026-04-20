@@ -1,10 +1,16 @@
 import { Outlet, NavLink, useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../firebase";
+import { Church } from "../../types/church";
+import { useMyChurchId } from "../../components/RequireMyChurch";
 
 function PortalLayout() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const myChurchId = useMyChurchId();
+  const [church, setChurch] = useState<Church | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -12,12 +18,26 @@ function PortalLayout() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    if (!myChurchId) { setChurch(null); return; }
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "churches", myChurchId));
+        if (snap.exists()) setChurch({ id: snap.id, ...snap.data() } as Church);
+        else setChurch(null);
+      } catch { setChurch(null); }
+    })();
+  }, [myChurchId]);
+
   const navItems = [
     { path: "/", label: "홈", icon: "home", end: true },
-    { path: "/bulletins", label: "주보/말씀", icon: "menu_book" },
     { path: "/notices", label: "소식", icon: "campaign" },
     { path: "/schedule", label: "일정", icon: "calendar_month" },
+    { path: "/churches", label: myChurchId ? "교회 변경" : "교회 선택", icon: "swap_horiz" },
   ];
+
+  const logoTitle = church?.name || "시온 교회 포탈";
+  const logoSubtitle = church ? (church.tagline || "CHURCH PORTAL") : "ZION CHURCH PORTAL";
 
   return (
     <div style={{ minHeight: "100vh", background: "#ffffff", fontFamily: "'Noto Sans KR', sans-serif", display: "flex", flexDirection: "column" }}>
@@ -38,12 +58,16 @@ function PortalLayout() {
         <div style={{ maxWidth: "1240px", margin: "0 auto", padding: "0 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: "4.25rem" }}>
           {/* 로고 */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }} onClick={() => navigate("/")}>
-            <div style={{ width: "2.5rem", height: "2.5rem", background: "linear-gradient(135deg, #16649c 0%, #0d4f7a 100%)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px rgba(22, 100, 156, 0.3)" }}>
-              <span className="material-symbols-outlined" style={{ color: "white", fontSize: "1.375rem" }}>church</span>
+            <div style={{ width: "2.5rem", height: "2.5rem", background: church?.logo ? "#eff6ff" : "linear-gradient(135deg, #16649c 0%, #0d4f7a 100%)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px rgba(22, 100, 156, 0.25)", overflow: "hidden" }}>
+              {church?.logo ? (
+                <img src={church.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <span className="material-symbols-outlined" style={{ color: "white", fontSize: "1.375rem" }}>church</span>
+              )}
             </div>
             <div>
-              <p style={{ fontWeight: 800, fontSize: "1.2rem", color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>시온 교회 포탈</p>
-              <p style={{ fontSize: "0.7rem", color: "#94a3b8", margin: 0, letterSpacing: "0.08em" }}>ZION CHURCH PORTAL</p>
+              <p style={{ fontWeight: 800, fontSize: "1.2rem", color: "#0f172a", margin: 0, letterSpacing: "-0.02em", maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{logoTitle}</p>
+              <p style={{ fontSize: "0.7rem", color: "#94a3b8", margin: 0, letterSpacing: "0.08em", maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{logoSubtitle}</p>
             </div>
           </div>
 
@@ -124,10 +148,10 @@ function PortalLayout() {
                 <div style={{ width: "2rem", height: "2rem", background: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <span className="material-symbols-outlined" style={{ color: "white", fontSize: "1.125rem" }}>church</span>
                 </div>
-                <span style={{ fontWeight: 700, fontSize: "1rem", color: "white" }}>시온 교회 포탈</span>
+                <span style={{ fontWeight: 700, fontSize: "1rem", color: "white" }}>{logoTitle}</span>
               </div>
               <p style={{ fontSize: "0.8rem", lineHeight: 1.7, color: "#94a3b8", margin: 0 }}>
-                한국 교회의 소식과 말씀을 연결하는<br />
+                교회와 성도를 잇는<br />
                 크리스천 커뮤니티 포탈
               </p>
             </div>
@@ -150,7 +174,7 @@ function PortalLayout() {
             </div>
           </div>
           <div style={{ borderTop: "1px solid #1e293b", paddingTop: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-            <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>© {new Date().getFullYear()} Zion Church Portal. All rights reserved.</p>
+            <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>© {new Date().getFullYear()} Church Portal. All rights reserved.</p>
             <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>Powered by Firebase</p>
           </div>
         </div>
