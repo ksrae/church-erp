@@ -4,7 +4,7 @@ import {
   serverTimestamp, query, orderBy,
 } from "firebase/firestore";
 import { db } from "../../firebase";
-import { Church } from "../../types/church";
+import { Church, ChurchStatus, getChurchStatus } from "../../types/church";
 
 function generateLicenseKey(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -13,12 +13,27 @@ function generateLicenseKey(): string {
   ).join("-");
 }
 
+const STATUS_LABEL: Record<ChurchStatus, string> = {
+  active: "활성",
+  hold: "보류",
+  suspended: "정지",
+};
+
+const STATUS_COLOR: Record<ChurchStatus, { bg: string; fg: string }> = {
+  active: { bg: "#dcfce7", fg: "#16a34a" },
+  hold: { bg: "#fef3c7", fg: "#b45309" },
+  suspended: { bg: "#fee2e2", fg: "#b91c1c" },
+};
+
+type ChurchFilter = "all" | ChurchStatus;
+
 function Churches() {
   const [churches, setChurches] = useState<Church[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<ChurchFilter>("all");
 
   const [form, setForm] = useState({
     name: "", pastorName: "", address: "", phone: "", email: "", website: "",
@@ -35,6 +50,26 @@ function Churches() {
 
   const handleCreate = async () => {
     if (!form.name.trim()) { alert("교회 이름을 입력하세요."); return; }
+
+    const optionalFields: { key: keyof typeof form; label: string }[] = [
+      { key: "pastorName", label: "담임목사" },
+      { key: "address", label: "주소" },
+      { key: "phone", label: "전화번호" },
+      { key: "email", label: "이메일" },
+      { key: "website", label: "홈페이지" },
+    ];
+    const missing = optionalFields.filter((f) => !form[f.key].trim());
+    if (missing.length > 0) {
+      const ok = confirm(
+        `입력되지 않은 항목이 있습니다:\n\n` +
+        missing.map((m) => `• ${m.label}`).join("\n") +
+        `\n\n입력되지 않은 정보는 교회 관리자가 직접 수정할 수 없으며,\n` +
+        `수정이 필요할 경우 시스템 관리자에게 "수정 요청"을 통해 변경을 요청해야 합니다.\n\n` +
+        `이대로 진행하시겠습니까?`
+      );
+      if (!ok) return;
+    }
+
     setIsSaving(true);
     try {
       const licenseKey = generateLicenseKey();
@@ -42,6 +77,7 @@ function Churches() {
         name: form.name.trim(),
         licenseKey,
         isActive: true,
+        status: "active",
         createdAt: new Date().toISOString(),
         pastorName: form.pastorName,
         address: form.address,
@@ -61,6 +97,8 @@ function Churches() {
   };
 
   const handleReissue = async (church: Church) => {
+    const status = getChurchStatus(church);
+    if (status === "suspended") { alert("정지된 교회는 라이선스 키를 재발급할 수 없습니다."); return; }
     if (!confirm(`"${church.name}"의 라이선스 키를 재발급하시겠습니까?\n기존 키는 즉시 무효화됩니다.`)) return;
     const newKey = generateLicenseKey();
     await updateDoc(doc(db, "churches", church.id), { licenseKey: newKey });
@@ -68,20 +106,71 @@ function Churches() {
   };
 
   const handleDelete = async (church: Church) => {
-    if (!confirm(`"${church.name}" 교회를 삭제하시겠습니까?\n라이선스 키가 무효화되고 해당 교회 관리자는 접근할 수 없게 됩니다.`)) return;
+    if (!confirm(`"${church.name}" 교회를 완전히 삭제하시겠습니까?\n라이선스 키가 무효화되고 해당 교회 관리자는 접근할 수 없게 됩니다.`)) return;
     await deleteDoc(doc(db, "churches", church.id));
     setChurches((prev) => prev.filter((c) => c.id !== church.id));
   };
 
-  const handleToggleActive = async (church: Church) => {
-    await updateDoc(doc(db, "churches", church.id), { isActive: !church.isActive });
-    setChurches((prev) => prev.map((c) => c.id === church.id ? { ...c, isActive: !c.isActive } : c));
+  const handleSetStatus = async (church: Church, next: ChurchStatus) => {
+    const current = getChurchStatus(church);
+    if (current === "suspended") { alert("정지된 교회의 상태는 변경할 수 없습니다."); return; }
+    if (current === next) return;
+
+    if (next === "suspended") {
+      const input = prompt(
+        `"${church.name}" 교회를 정지시키려 합니다.\n\n` +
+        `⚠ 정지는 되돌릴 수 없습니다.\n` +
+        `- 성도 포탈 목록/검색에서 제거됩니다.\n` +
+        `- 이 교회를 내 교회로 설정한 성도들은 자동 해제됩니다.\n` +
+        `- 기존 관리자의 로그인이 차단됩니다.\n\n` +
+        `진행하려면 교회 이름을 정확히 입력하세요.`
+      );
+      if (input === null) return;
+      if (input.trim() !== church.name) { alert("교회 이름이 일치하지 않아 취소되었습니다."); return; }
+    } else if (next === "hold") {
+      const reason = prompt(`"${church.name}" 교회를 보류 처리합니다.\n\n- 관리자 작업이 중단되지만 성도 열람은 가능합니다.\n- 언제든지 다시 활성화할 수 있습니다.\n\n(선택) 사유를 입력하세요:`);
+      if (reason === null) return; // 취소
+      const patch = {
+        status: "hold" as ChurchStatus,
+        statusReason: reason.trim(),
+        statusChangedAt: new Date().toISOString(),
+        isActive: true, // 보류는 성도 포탈 노출 유지
+      };
+      await updateDoc(doc(db, "churches", church.id), patch);
+      setChurches((prev) => prev.map((c) => c.id === church.id ? { ...c, ...patch } : c));
+      return;
+    } else if (next === "active") {
+      if (!confirm(`"${church.name}" 교회를 다시 활성화하시겠습니까?`)) return;
+    }
+
+    // isActive 의미: "정지되지 않음" → 성도 포탈 노출 여부.
+    // active / hold 는 true, suspended 만 false.
+    const patch: Partial<Church> = {
+      status: next,
+      statusChangedAt: new Date().toISOString(),
+      isActive: next !== "suspended",
+    };
+    await updateDoc(doc(db, "churches", church.id), patch as any);
+    setChurches((prev) => prev.map((c) => c.id === church.id ? { ...c, ...patch } : c));
   };
 
   const copyToClipboard = async (text: string, id: string) => {
     await navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const countByStatus = (s: ChurchStatus) => churches.filter((c) => getChurchStatus(c) === s).length;
+
+  const filteredChurches = filter === "all"
+    ? churches
+    : churches.filter((c) => getChurchStatus(c) === filter);
+
+  const filterLabel: Record<ChurchFilter, string> = {
+    all: "전체",
+    active: "활성",
+    hold: "보류",
+    suspended: "정지",
   };
 
   return (
@@ -100,24 +189,56 @@ function Churches() {
         </button>
       </div>
 
-      {/* 통계 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
-        {[
-          { label: "전체 교회", value: churches.length, icon: "business", color: "#3b82f6" },
-          { label: "활성 교회", value: churches.filter((c) => c.isActive).length, icon: "check_circle", color: "#10b981" },
-          { label: "비활성 교회", value: churches.filter((c) => !c.isActive).length, icon: "cancel", color: "#94a3b8" },
-        ].map((s) => (
-          <div key={s.label} style={{ background: "white", borderRadius: "12px", padding: "1.25rem", border: "1px solid #e2e8f0" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: "1.5rem", color: s.color }}>{s.icon}</span>
-              <div>
-                <p style={{ fontSize: "0.8rem", color: "#64748b", margin: 0 }}>{s.label}</p>
-                <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#1e293b", margin: 0 }}>{s.value}</p>
+      {/* 통계 / 필터 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+        {([
+          { key: "all" as ChurchFilter, label: "전체 교회", value: churches.length, icon: "business", color: "#3b82f6" },
+          { key: "active" as ChurchFilter, label: "활성", value: countByStatus("active"), icon: "check_circle", color: "#16a34a" },
+          { key: "hold" as ChurchFilter, label: "보류", value: countByStatus("hold"), icon: "pause_circle", color: "#b45309" },
+          { key: "suspended" as ChurchFilter, label: "정지", value: countByStatus("suspended"), icon: "block", color: "#b91c1c" },
+        ]).map((s) => {
+          const active = filter === s.key;
+          return (
+            <button
+              key={s.key}
+              onClick={() => setFilter(s.key)}
+              aria-pressed={active}
+              style={{
+                textAlign: "left", cursor: "pointer",
+                background: active ? "#eff6ff" : "white",
+                borderRadius: "12px", padding: "1.25rem",
+                border: `1px solid ${active ? s.color : "#e2e8f0"}`,
+                boxShadow: active ? `0 0 0 3px ${s.color}22` : "none",
+                transition: "all 0.15s",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <span className="material-symbols-outlined" style={{ fontSize: "1.5rem", color: s.color }}>{s.icon}</span>
+                <div>
+                  <p style={{ fontSize: "0.8rem", color: "#64748b", margin: 0 }}>{s.label}</p>
+                  <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "#1e293b", margin: 0 }}>{s.value}</p>
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
+            </button>
+          );
+        })}
       </div>
+
+      {filter !== "all" && (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem", padding: "0.5rem 0.75rem", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: "1rem", color: "#1d4ed8" }}>filter_alt</span>
+          <span style={{ fontSize: "0.82rem", color: "#1e3a8a" }}>
+            <strong>{filterLabel[filter]}</strong> 상태로 필터링 중 · {filteredChurches.length}개
+          </span>
+          <button
+            onClick={() => setFilter("all")}
+            style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#1d4ed8", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.2rem" }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: "0.95rem" }}>close</span>
+            필터 해제
+          </button>
+        </div>
+      )}
 
       {/* 교회 목록 */}
       {isLoading ? (
@@ -127,65 +248,101 @@ function Churches() {
           <span className="material-symbols-outlined" style={{ fontSize: "3rem", color: "#cbd5e1", display: "block", marginBottom: "0.75rem" }}>business</span>
           <p style={{ color: "#64748b" }}>등록된 교회가 없습니다.</p>
         </div>
+      ) : filteredChurches.length === 0 ? (
+        <div style={{ background: "white", borderRadius: "12px", padding: "3rem", textAlign: "center", border: "1px solid #e2e8f0" }}>
+          <span className="material-symbols-outlined" style={{ fontSize: "3rem", color: "#cbd5e1", display: "block", marginBottom: "0.75rem" }}>filter_alt_off</span>
+          <p style={{ color: "#64748b", margin: "0 0 0.5rem" }}>
+            <strong>{filterLabel[filter]}</strong> 상태의 교회가 없습니다.
+          </p>
+          <button
+            onClick={() => setFilter("all")}
+            style={{ marginTop: "0.5rem", padding: "0.45rem 0.9rem", background: "white", border: "1px solid #cbd5e1", borderRadius: "8px", cursor: "pointer", color: "#334155", fontWeight: 600, fontSize: "0.85rem" }}
+          >
+            전체 보기
+          </button>
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {churches.map((church) => (
-            <div key={church.id} style={{ background: "white", borderRadius: "12px", padding: "1.25rem 1.5rem", border: "1px solid #e2e8f0", opacity: church.isActive ? 1 : 0.6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.375rem" }}>
-                    <h3 style={{ fontWeight: 700, fontSize: "1.1rem", color: "#1e293b", margin: 0 }}>{church.name}</h3>
-                    <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: "10px", background: church.isActive ? "#dcfce7" : "#f1f5f9", color: church.isActive ? "#16a34a" : "#64748b" }}>
-                      {church.isActive ? "활성" : "비활성"}
-                    </span>
-                  </div>
-                  {church.pastorName && <p style={{ fontSize: "0.875rem", color: "#475569", margin: "0 0 0.25rem" }}>담임목사: {church.pastorName}</p>}
-                  {church.address && <p style={{ fontSize: "0.8rem", color: "#94a3b8", margin: 0 }}>{church.address}</p>}
-
-                  {/* 라이선스 키 */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.875rem", padding: "0.625rem 0.875rem", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", width: "fit-content" }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: "1rem", color: "#64748b" }}>key</span>
-                    <code style={{ fontSize: "0.9rem", fontWeight: 700, color: "#1e293b", letterSpacing: "0.1em", fontFamily: "monospace" }}>
-                      {church.licenseKey}
-                    </code>
-                    <button
-                      onClick={() => copyToClipboard(church.licenseKey, church.id)}
-                      title="복사"
-                      style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", color: copiedId === church.id ? "#16a34a" : "#94a3b8" }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>
-                        {copiedId === church.id ? "check" : "content_copy"}
+          {filteredChurches.map((church) => {
+            const status = getChurchStatus(church);
+            const color = STATUS_COLOR[status];
+            return (
+              <div key={church.id} style={{ background: "white", borderRadius: "12px", padding: "1.25rem 1.5rem", border: "1px solid #e2e8f0", opacity: status === "suspended" ? 0.7 : 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.375rem" }}>
+                      <h3 style={{ fontWeight: 700, fontSize: "1.1rem", color: "#1e293b", margin: 0 }}>{church.name}</h3>
+                      <span style={{ fontSize: "0.75rem", padding: "2px 10px", borderRadius: "10px", background: color.bg, color: color.fg, fontWeight: 700 }}>
+                        {STATUS_LABEL[status]}
                       </span>
+                    </div>
+                    {church.pastorName && <p style={{ fontSize: "0.875rem", color: "#475569", margin: "0 0 0.25rem" }}>담임목사: {church.pastorName}</p>}
+                    {church.address && <p style={{ fontSize: "0.8rem", color: "#94a3b8", margin: 0 }}>{church.address}</p>}
+                    {church.statusReason && (status === "hold" || status === "suspended") && (
+                      <p style={{ fontSize: "0.78rem", color: color.fg, margin: "0.375rem 0 0", padding: "0.375rem 0.625rem", background: color.bg, borderRadius: "6px", display: "inline-block" }}>
+                        사유: {church.statusReason}
+                      </p>
+                    )}
+
+                    {/* 라이선스 키 */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.875rem", padding: "0.625rem 0.875rem", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", width: "fit-content" }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: "1rem", color: "#64748b" }}>key</span>
+                      <code style={{ fontSize: "0.9rem", fontWeight: 700, color: "#1e293b", letterSpacing: "0.1em", fontFamily: "monospace" }}>
+                        {church.licenseKey}
+                      </code>
+                      <button
+                        onClick={() => copyToClipboard(church.licenseKey, church.id)}
+                        title="복사"
+                        style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", color: copiedId === church.id ? "#16a34a" : "#94a3b8" }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>
+                          {copiedId === church.id ? "check" : "content_copy"}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 액션 버튼 */}
+                  <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    {status === "active" && (
+                      <>
+                        <button onClick={() => handleSetStatus(church, "hold")} style={btnWarn}>
+                          <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>pause_circle</span>
+                          보류
+                        </button>
+                        <button onClick={() => handleSetStatus(church, "suspended")} style={btnDanger}>
+                          <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>block</span>
+                          정지
+                        </button>
+                      </>
+                    )}
+                    {status === "hold" && (
+                      <>
+                        <button onClick={() => handleSetStatus(church, "active")} style={btnSuccess}>
+                          <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>restart_alt</span>
+                          활성화
+                        </button>
+                        <button onClick={() => handleSetStatus(church, "suspended")} style={btnDanger}>
+                          <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>block</span>
+                          정지
+                        </button>
+                      </>
+                    )}
+                    {status !== "suspended" && (
+                      <button onClick={() => handleReissue(church)} style={btnNeutral}>
+                        <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>refresh</span>
+                        키 재발급
+                      </button>
+                    )}
+                    <button onClick={() => handleDelete(church)} style={btnDelete}>
+                      <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>delete</span>
+                      삭제
                     </button>
                   </div>
                 </div>
-
-                {/* 액션 버튼 */}
-                <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
-                  <button
-                    onClick={() => handleToggleActive(church)}
-                    style={{ padding: "0.5rem 0.875rem", borderRadius: "8px", border: "1px solid #e2e8f0", background: "white", cursor: "pointer", fontSize: "0.8rem", color: "#475569" }}
-                  >
-                    {church.isActive ? "비활성화" : "활성화"}
-                  </button>
-                  <button
-                    onClick={() => handleReissue(church)}
-                    style={{ padding: "0.5rem 0.875rem", borderRadius: "8px", border: "1px solid #e2e8f0", background: "white", cursor: "pointer", fontSize: "0.8rem", color: "#475569", display: "flex", alignItems: "center", gap: "0.25rem" }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>refresh</span>
-                    키 재발급
-                  </button>
-                  <button
-                    onClick={() => handleDelete(church)}
-                    style={{ padding: "0.5rem 0.875rem", borderRadius: "8px", border: "1px solid #fca5a5", background: "#fef2f2", cursor: "pointer", fontSize: "0.8rem", color: "#dc2626", display: "flex", alignItems: "center", gap: "0.25rem" }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>delete</span>
-                    삭제
-                  </button>
-                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -236,5 +393,22 @@ function Churches() {
     </div>
   );
 }
+
+const btnBase: React.CSSProperties = {
+  padding: "0.5rem 0.875rem",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontSize: "0.8rem",
+  fontWeight: 600,
+  display: "flex",
+  alignItems: "center",
+  gap: "0.25rem",
+  border: "1px solid",
+};
+const btnNeutral: React.CSSProperties = { ...btnBase, borderColor: "#e2e8f0", background: "white", color: "#475569" };
+const btnWarn: React.CSSProperties = { ...btnBase, borderColor: "#fcd34d", background: "#fffbeb", color: "#b45309" };
+const btnSuccess: React.CSSProperties = { ...btnBase, borderColor: "#86efac", background: "#f0fdf4", color: "#15803d" };
+const btnDanger: React.CSSProperties = { ...btnBase, borderColor: "#fca5a5", background: "#fef2f2", color: "#b91c1c" };
+const btnDelete: React.CSSProperties = { ...btnBase, borderColor: "#fca5a5", background: "#fef2f2", color: "#dc2626" };
 
 export default Churches;

@@ -5,6 +5,12 @@
 export type WorshipType =
   | "sunday"
   | "wednesday"
+  | "dawn"
+  | "friday"
+  | "youth"
+  | "student"
+  | "children"
+  | "sundaySchool"
   | "special"
   | "event"
   | "meeting"
@@ -71,6 +77,12 @@ export interface WorshipOrderItem {
 export const worshipTypeLabels: Record<WorshipType, string> = {
   sunday: "주일예배",
   wednesday: "수요예배",
+  dawn: "새벽예배",
+  friday: "금요철야",
+  youth: "청년예배",
+  student: "학생예배",
+  children: "유년예배",
+  sundaySchool: "주일학교",
   special: "특별예배",
   event: "행사",
   meeting: "모임",
@@ -82,6 +94,12 @@ export const worshipTypeLabels: Record<WorshipType, string> = {
 export const worshipTypeColors: Record<WorshipType, string> = {
   sunday: "#1d4ed8",
   wednesday: "#16a34a",
+  dawn: "#0369a1",
+  friday: "#6d28d9",
+  youth: "#ea580c",
+  student: "#0d9488",
+  children: "#db2777",
+  sundaySchool: "#ca8a04",
   special: "#d97706",
   event: "#db2777",
   meeting: "#0891b2",
@@ -89,6 +107,20 @@ export const worshipTypeColors: Record<WorshipType, string> = {
   seminar: "#059669",
   other: "#7c3aed",
 };
+
+// 반복 예배 스케줄에서 선택 가능한 예배 종류
+export const WORSHIP_SCHEDULE_TYPES: WorshipType[] = [
+  "sunday",
+  "wednesday",
+  "dawn",
+  "friday",
+  "youth",
+  "student",
+  "children",
+  "sundaySchool",
+  "special",
+  "other",
+];
 
 // 일회성 이벤트 타입 (예배가 아닌 일정)
 export const ONE_TIME_EVENT_TYPES: WorshipType[] = ["event", "meeting", "revival", "seminar"];

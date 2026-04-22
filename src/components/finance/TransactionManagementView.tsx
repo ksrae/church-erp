@@ -2,6 +2,7 @@ import { Transaction, Account } from "../../types/finance";
 import TransactionFilters from "./TransactionFilters";
 import TransactionSummary from "./TransactionSummary";
 import TransactionTable from "./TransactionTable";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface TransactionManagementViewProps {
   type: "income" | "expense";
@@ -32,15 +33,18 @@ function TransactionManagementView({
   onEdit,
   onDelete,
 }: TransactionManagementViewProps) {
-  const total = transactions.reduce((sum, t) => sum + t.amount, 0);
-  const title = type === "income" ? "수입" : "지출";
+  const { t } = useLocale();
+  const total = transactions.reduce((sum, x) => sum + x.amount, 0);
+  const title = type === "income" ? t("finance.txnMgmt.incomeTitle") : t("finance.txnMgmt.expenseTitle");
+  const subtitle = type === "income" ? t("finance.txnMgmt.incomeSubtitle") : t("finance.txnMgmt.expenseSubtitle");
+  const addLabel = type === "income" ? t("finance.txnMgmt.incomeAdd") : t("finance.txnMgmt.expenseAdd");
 
   return (
     <>
       <div className="transaction-header">
         <div className="transaction-header__info">
-          <h2>{title} 관리</h2>
-          <p>모든 {title} 내역을 관리합니다.</p>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
         </div>
         <div className="transaction-header__actions">
           <button
@@ -48,7 +52,7 @@ function TransactionManagementView({
             onClick={onAdd}
           >
             <span className="material-symbols-outlined">add</span>
-            {title} 추가
+            {addLabel}
           </button>
         </div>
       </div>

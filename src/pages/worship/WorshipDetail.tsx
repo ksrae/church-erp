@@ -3,18 +3,26 @@ import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc, updateDoc, getDocs, query, collection, orderBy, limit, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "../../firebase";
-import { WorshipInstance, WorshipOrderItem, worshipTypeLabels } from "../../types/worship";
+import { WorshipInstance, WorshipOrderItem, worshipTypeLabels, WorshipType } from "../../types/worship";
 import { logActivity } from "../../utils/auditLog";
+import { useLocale } from "../../i18n/LocaleContext";
 
 function WorshipDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [instance, setInstance] = useState<WorshipInstance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [bulletinFile, setBulletinFile] = useState<File | null>(null);
   const [isUploadingBulletin, setIsUploadingBulletin] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const worshipTypeLabel = (type: WorshipType): string => {
+    const key = `worship.type.${type}`;
+    const translated = t(key as any);
+    return translated === key ? worshipTypeLabels[type] : translated;
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -51,10 +59,14 @@ function WorshipDetail() {
         updatedAt: serverTimestamp(),
       });
       setInstance(updated);
-      await logActivity("WORSHIP", "예배 내역 수정", `${updated.date} ${worshipTypeLabels[updated.type]} 내역이 수정되었습니다.`);
-      alert("저장되었습니다.");
+      await logActivity(
+        "WORSHIP",
+        t("worship.audit.detailUpdated"),
+        t("worship.audit.detailUpdatedBody", { date: updated.date, type: worshipTypeLabel(updated.type) }),
+      );
+      alert(t("worship.detail.saved"));
     } catch (e: any) {
-      alert(`저장 실패: ${e.message}`);
+      alert(t("worship.detail.saveFailed", { msg: e.message }));
     } finally {
       setIsSaving(false);
     }
@@ -76,10 +88,14 @@ function WorshipDetail() {
       });
       setInstance((prev) => prev ? { ...prev, bulletinFileUrl: url, bulletinFileName: bulletinFile.name } : prev);
       setBulletinFile(null);
-      await logActivity("WORSHIP", "주보 업로드", `${instance.date} 주보가 업로드되었습니다.`);
-      alert("주보가 업로드되었습니다.");
+      await logActivity(
+        "WORSHIP",
+        t("worship.audit.bulletinUploaded"),
+        t("worship.audit.bulletinUploadedBody", { date: instance.date }),
+      );
+      alert(t("worship.detail.bulletinSaved"));
     } catch (e: any) {
-      alert(`업로드 실패: ${e.message}`);
+      alert(t("worship.detail.uploadFailed", { msg: e.message }));
     } finally {
       setIsUploadingBulletin(false);
     }
@@ -93,14 +109,14 @@ function WorshipDetail() {
       if (d.id !== id) {
         const prev = d.data() as WorshipInstance;
         if (prev.order && prev.order.length > 0) {
-          if (confirm("이전 예배의 순서를 불러오시겠습니까?")) {
+          if (confirm(t("worship.detail.loadPrevConfirm"))) {
             setInstance((p) => p ? { ...p, order: prev.order.map((item, i) => ({ ...item, id: `order-${Date.now()}-${i}` })) } : p);
           }
           return;
         }
       }
     }
-    alert("참고할 이전 예배 순서가 없습니다.");
+    alert(t("worship.detail.noPrevOrder"));
   };
 
   const addOrderItem = () => {
@@ -132,8 +148,8 @@ function WorshipDetail() {
     setInstance((p) => p ? { ...p, order: newOrder.map((item, i) => ({ ...item, seq: i + 1 })) } : p);
   };
 
-  if (isLoading) return <div style={{ padding: "2rem", textAlign: "center" }}>불러오는 중...</div>;
-  if (!instance) return <div style={{ padding: "2rem", textAlign: "center", color: "var(--danger)" }}>예배 정보를 찾을 수 없습니다.</div>;
+  if (isLoading) return <div style={{ padding: "2rem", textAlign: "center" }}>{t("worship.detail.loading")}</div>;
+  if (!instance) return <div style={{ padding: "2rem", textAlign: "center", color: "var(--danger)" }}>{t("worship.detail.notFound")}</div>;
 
   return (
     <div className="page-content" style={{ maxWidth: "800px", margin: "0 auto" }}>
@@ -143,18 +159,18 @@ function WorshipDetail() {
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
           <div>
-            <h1 className="page-header__title" style={{ margin: 0 }}>{instance.date} — {worshipTypeLabels[instance.type]}</h1>
+            <h1 className="page-header__title" style={{ margin: 0 }}>{t("worship.detail.heading", { date: instance.date, type: worshipTypeLabel(instance.type) })}</h1>
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem", alignItems: "center" }}>
               <span style={{
                 fontSize: "0.75rem", padding: "2px 8px", borderRadius: "12px",
                 background: instance.detailStatus === "complete" ? "#dcfce7" : instance.detailStatus === "partial" ? "#fef3c7" : "#f1f5f9",
                 color: instance.detailStatus === "complete" ? "#16a34a" : instance.detailStatus === "partial" ? "#d97706" : "#64748b",
               }}>
-                {instance.detailStatus === "complete" ? "입력 완료" : instance.detailStatus === "partial" ? "입력 중" : "미입력"}
+                {instance.detailStatus === "complete" ? t("worship.detail.statusComplete") : instance.detailStatus === "partial" ? t("worship.detail.statusPartial") : t("worship.detail.statusEmpty")}
               </span>
               <label style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.875rem", cursor: "pointer" }}>
                 <input type="checkbox" checked={instance.isPublished} onChange={(e) => setInstance((p) => p ? { ...p, isPublished: e.target.checked } : p)} />
-                성도 포탈 공개
+                {t("worship.detail.portalPublic")}
               </label>
             </div>
           </div>
@@ -164,56 +180,56 @@ function WorshipDetail() {
       <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
         {/* 설교 정보 */}
         <div className="form-card">
-          <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>설교 정보</h2>
+          <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>{t("worship.detail.sermonTitle")}</h2>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">설교 제목</label>
-              <input type="text" className="form-input" placeholder="설교 제목" value={instance.title || ""} onChange={(e) => setInstance((p) => p ? { ...p, title: e.target.value } : p)} />
+              <label className="form-label">{t("worship.detail.sermonTitleField")}</label>
+              <input type="text" className="form-input" placeholder={t("worship.detail.sermonTitlePlaceholder")} value={instance.title || ""} onChange={(e) => setInstance((p) => p ? { ...p, title: e.target.value } : p)} />
             </div>
             <div className="form-group">
-              <label className="form-label">설교자</label>
-              <input type="text" className="form-input" placeholder="설교자 이름" value={instance.preacher || ""} onChange={(e) => setInstance((p) => p ? { ...p, preacher: e.target.value } : p)} />
+              <label className="form-label">{t("worship.detail.preacherField")}</label>
+              <input type="text" className="form-input" placeholder={t("worship.detail.preacherPlaceholder")} value={instance.preacher || ""} onChange={(e) => setInstance((p) => p ? { ...p, preacher: e.target.value } : p)} />
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">성경 본문</label>
-            <input type="text" className="form-input" placeholder="예: 요한복음 3:16" value={instance.scripture || ""} onChange={(e) => setInstance((p) => p ? { ...p, scripture: e.target.value } : p)} />
+            <label className="form-label">{t("worship.detail.scripture")}</label>
+            <input type="text" className="form-input" placeholder={t("worship.detail.scripturePlaceholder")} value={instance.scripture || ""} onChange={(e) => setInstance((p) => p ? { ...p, scripture: e.target.value } : p)} />
           </div>
           <div className="form-group">
-            <label className="form-label">내부 메모 (포탈 미표시)</label>
-            <textarea className="form-textarea" rows={2} placeholder="관리자용 메모" value={instance.memo || ""} onChange={(e) => setInstance((p) => p ? { ...p, memo: e.target.value } : p)} />
+            <label className="form-label">{t("worship.detail.memo")}</label>
+            <textarea className="form-textarea" rows={2} placeholder={t("worship.detail.memoPlaceholder")} value={instance.memo || ""} onChange={(e) => setInstance((p) => p ? { ...p, memo: e.target.value } : p)} />
           </div>
         </div>
 
         {/* 예배 순서 */}
         <div className="form-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>예배 순서</h2>
+            <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>{t("worship.detail.orderTitle")}</h2>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <button className="btn btn--outline" onClick={loadPrevOrder} style={{ fontSize: "0.8rem", padding: "0.375rem 0.75rem" }}>
                 <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>history</span>
-                이전 예배에서 가져오기
+                {t("worship.detail.loadPrev")}
               </button>
               <button className="btn btn--primary" onClick={addOrderItem} style={{ fontSize: "0.8rem", padding: "0.375rem 0.75rem" }}>
                 <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>add</span>
-                순서 추가
+                {t("worship.detail.addOrder")}
               </button>
             </div>
           </div>
 
           {instance.order.length === 0 ? (
             <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-secondary)", border: "2px dashed var(--border-color)", borderRadius: "8px" }}>
-              <p>예배 순서 항목이 없습니다.</p>
-              <p style={{ fontSize: "0.875rem" }}>"순서 추가" 버튼으로 항목을 추가하세요.</p>
+              <p>{t("worship.detail.orderEmpty")}</p>
+              <p style={{ fontSize: "0.875rem" }}>{t("worship.detail.orderEmptyHint")}</p>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {instance.order.map((item, idx) => (
                 <div key={item.id} style={{ display: "grid", gridTemplateColumns: "2rem 1fr 1fr 2fr auto", gap: "0.5rem", alignItems: "center" }}>
                   <span style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "0.875rem" }}>{item.seq}</span>
-                  <input type="text" className="form-input" placeholder="예: 대표기도" value={item.name} onChange={(e) => updateOrderItem(item.id, "name", e.target.value)} />
-                  <input type="text" className="form-input" placeholder="담당자 (선택)" value={item.assignee || ""} onChange={(e) => updateOrderItem(item.id, "assignee", e.target.value)} />
-                  <input type="text" className="form-input" placeholder="비고 (선택)" value={item.note || ""} onChange={(e) => updateOrderItem(item.id, "note", e.target.value)} />
+                  <input type="text" className="form-input" placeholder={t("worship.detail.orderNamePlaceholder")} value={item.name} onChange={(e) => updateOrderItem(item.id, "name", e.target.value)} />
+                  <input type="text" className="form-input" placeholder={t("worship.detail.orderAssigneePlaceholder")} value={item.assignee || ""} onChange={(e) => updateOrderItem(item.id, "assignee", e.target.value)} />
+                  <input type="text" className="form-input" placeholder={t("worship.detail.orderNotePlaceholder")} value={item.note || ""} onChange={(e) => updateOrderItem(item.id, "note", e.target.value)} />
                   <div style={{ display: "flex", gap: "2px" }}>
                     <button onClick={() => moveOrderItem(item.id, "up")} disabled={idx === 0} style={{ background: "none", border: "none", cursor: idx === 0 ? "not-allowed" : "pointer", opacity: idx === 0 ? 0.3 : 1, padding: "2px" }}>
                       <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>arrow_upward</span>
@@ -233,14 +249,14 @@ function WorshipDetail() {
 
         {/* 주보 파일 */}
         <div className="form-card">
-          <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>주보 파일</h2>
+          <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>{t("worship.detail.bulletinTitle")}</h2>
           {instance.bulletinFileUrl && (
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem", background: "#f0fdf4", borderRadius: "8px", marginBottom: "1rem" }}>
               <span className="material-symbols-outlined" style={{ color: "#16a34a" }}>description</span>
               <a href={instance.bulletinFileUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)", fontWeight: 600 }}>
-                {instance.bulletinFileName || "주보 파일"}
+                {instance.bulletinFileName || t("worship.detail.bulletinFileLabel")}
               </a>
-              <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>업로드됨</span>
+              <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>{t("worship.detail.bulletinUploadedTag")}</span>
             </div>
           )}
           <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
@@ -251,26 +267,26 @@ function WorshipDetail() {
             />
             <button className="btn btn--outline" onClick={() => fileInputRef.current?.click()}>
               <span className="material-symbols-outlined">upload_file</span>
-              {instance.bulletinFileUrl ? "주보 교체" : "주보 업로드"}
+              {instance.bulletinFileUrl ? t("worship.detail.bulletinReplace") : t("worship.detail.bulletinUpload")}
             </button>
             {bulletinFile && (
               <>
                 <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>{bulletinFile.name}</span>
                 <button className="btn btn--primary" onClick={handleBulletinUpload} disabled={isUploadingBulletin}>
-                  {isUploadingBulletin ? "업로드 중..." : "확인"}
+                  {isUploadingBulletin ? t("worship.detail.uploading") : t("worship.detail.confirm")}
                 </button>
               </>
             )}
           </div>
-          <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "0.5rem" }}>PDF, JPG, PNG 파일을 지원합니다.</p>
+          <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "0.5rem" }}>{t("worship.detail.fileTypeHint")}</p>
         </div>
 
         {/* 저장 버튼 */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-          <button className="btn btn--outline" onClick={() => navigate("/worship")}>목록으로</button>
+          <button className="btn btn--outline" onClick={() => navigate("/worship")}>{t("worship.detail.backToList")}</button>
           <button className="btn btn--primary" onClick={handleSave} disabled={isSaving}>
             <span className="material-symbols-outlined">save</span>
-            {isSaving ? "저장 중..." : "저장"}
+            {isSaving ? t("worship.detail.saving") : t("worship.detail.save")}
           </button>
         </div>
       </div>

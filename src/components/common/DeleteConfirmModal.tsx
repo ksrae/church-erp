@@ -1,3 +1,5 @@
+import { useLocale } from "../../i18n/LocaleContext";
+
 interface DeleteConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -11,17 +13,18 @@ function DeleteConfirmModal({
   isOpen,
   onClose,
   onConfirm,
-  title = "삭제 확인",
+  title,
   message,
-  warningMessage = "이 작업은 되돌릴 수 없습니다.",
+  warningMessage,
 }: DeleteConfirmModalProps) {
+  const { t } = useLocale();
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content confirm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{title}</h3>
+          <h3>{title ?? t("common.deleteConfirmTitle")}</h3>
           <button className="modal-close" onClick={onClose}>
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -31,14 +34,14 @@ function DeleteConfirmModal({
             <span className="material-symbols-outlined">warning</span>
           </div>
           <p>{message}</p>
-          <p className="warning">{warningMessage}</p>
+          <p className="warning">{warningMessage ?? t("common.deleteWarning")}</p>
         </div>
         <div className="modal-footer">
           <button className="btn-secondary" onClick={onClose}>
-            취소
+            {t("common.cancel")}
           </button>
           <button className="btn-danger" onClick={onConfirm}>
-            삭제
+            {t("common.delete")}
           </button>
         </div>
       </div>

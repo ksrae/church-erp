@@ -6,6 +6,7 @@ import { db, storage, auth } from "../../firebase";
 import { Announcement, AnnouncementCategory, categoryLabels } from "../../types/announcement";
 import { logActivity } from "../../utils/auditLog";
 import { useAuth } from "../../App";
+import { useLocale } from "../../i18n/LocaleContext";
 
 const defaultForm: Omit<Announcement, "id" | "createdAt" | "updatedAt"> = {
   title: "",
@@ -21,6 +22,7 @@ const defaultForm: Omit<Announcement, "id" | "createdAt" | "updatedAt"> = {
 function AnnouncementEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useLocale();
   const isEdit = !!id;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { auth: authState } = useAuth();
@@ -30,6 +32,12 @@ function AnnouncementEdit() {
   const [isLoading, setIsLoading] = useState(isEdit);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  const categoryLabel = (cat: AnnouncementCategory): string => {
+    const key = `announcement.category.${cat}`;
+    const translated = t(key as any);
+    return translated === key ? categoryLabels[cat] : translated;
+  };
 
   useEffect(() => {
     if (!isEdit || !id) return;
@@ -62,7 +70,7 @@ function AnnouncementEdit() {
       const url = await getDownloadURL(storageRef);
       setForm((p) => ({ ...p, attachments: [...p.attachments, { name: file.name, url }] }));
     } catch (e: any) {
-      alert(`업로드 실패: ${e.message}`);
+      alert(t("ann.edit.uploadFailed", { msg: e.message }));
     } finally {
       setIsUploading(false);
     }
@@ -73,12 +81,12 @@ function AnnouncementEdit() {
   };
 
   const handleSave = async (status: "draft" | "published") => {
-    if (!form.title.trim()) { alert("제목을 입력해주세요."); return; }
-    if (!form.content.trim()) { alert("내용을 입력해주세요."); return; }
+    if (!form.title.trim()) { alert(t("ann.edit.titleRequired")); return; }
+    if (!form.content.trim()) { alert(t("ann.edit.contentRequired")); return; }
 
     setIsSaving(true);
     try {
-      const username = auth.currentUser?.email?.split("@")[0] || "관리자";
+      const username = auth.currentUser?.email?.split("@")[0] || t("ann.edit.defaultAdmin");
       const data = {
         ...form,
         status,
@@ -88,7 +96,12 @@ function AnnouncementEdit() {
 
       if (isEdit && id) {
         await updateDoc(doc(db, "announcements", id), { ...data, updatedAt: serverTimestamp() });
-        await logActivity("ANNOUNCEMENT", "공지 수정", `"${form.title}" 공지가 수정되었습니다.`, username);
+        await logActivity(
+          "ANNOUNCEMENT",
+          t("ann.audit.updateTitle"),
+          t("ann.audit.updateBody", { title: form.title }),
+          username,
+        );
       } else {
         await addDoc(collection(db, "announcements"), {
           ...data,
@@ -97,17 +110,22 @@ function AnnouncementEdit() {
           updatedAt: serverTimestamp(),
           createdBy: username,
         });
-        await logActivity("ANNOUNCEMENT", "공지 등록", `"${form.title}" 공지가 등록되었습니다.`, username);
+        await logActivity(
+          "ANNOUNCEMENT",
+          t("ann.audit.createTitle"),
+          t("ann.audit.createBody", { title: form.title }),
+          username,
+        );
       }
       navigate("/announcements");
     } catch (e: any) {
-      alert(`저장 실패: ${e.message}`);
+      alert(t("ann.edit.saveFailed", { msg: e.message }));
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (isLoading) return <div style={{ padding: "2rem", textAlign: "center" }}>불러오는 중...</div>;
+  if (isLoading) return <div style={{ padding: "2rem", textAlign: "center" }}>{t("ann.edit.loading")}</div>;
 
   return (
     <div className="page-content" style={{ maxWidth: "800px", margin: "0 auto" }}>
@@ -116,51 +134,51 @@ function AnnouncementEdit() {
           <button onClick={() => navigate("/announcements")} style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "white", border: "1px solid var(--border-color)", borderRadius: "0.5rem", width: "2.5rem", height: "2.5rem", cursor: "pointer" }}>
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <h1 className="page-header__title" style={{ margin: 0 }}>{isEdit ? "공지 수정" : "공지 작성"}</h1>
+          <h1 className="page-header__title" style={{ margin: 0 }}>{isEdit ? t("ann.edit.editTitle") : t("ann.edit.newTitle")}</h1>
         </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
         <div className="form-card">
           <div className="form-group">
-            <label className="form-label">제목 *</label>
-            <input type="text" className="form-input" placeholder="공지 제목을 입력하세요" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
+            <label className="form-label">{t("ann.edit.field.title")} *</label>
+            <input type="text" className="form-input" placeholder={t("ann.edit.field.titlePlaceholder")} value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">카테고리</label>
+              <label className="form-label">{t("ann.edit.field.category")}</label>
               <select className="form-select" value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value as AnnouncementCategory }))}>
                 {(Object.keys(categoryLabels) as AnnouncementCategory[]).map((k) => (
-                  <option key={k} value={k}>{categoryLabels[k]}</option>
+                  <option key={k} value={k}>{categoryLabel(k)}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
               <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <input type="checkbox" checked={form.isPinned} onChange={(e) => setForm((p) => ({ ...p, isPinned: e.target.checked }))} />
-                상단 고정
+                {t("ann.edit.field.pinned")}
               </label>
             </div>
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">게시 시작일 *</label>
+              <label className="form-label">{t("ann.edit.field.startDate")} *</label>
               <input type="date" className="form-input" value={form.startDate} onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))} />
             </div>
             <div className="form-group">
-              <label className="form-label">게시 종료일 (없으면 무기한)</label>
+              <label className="form-label">{t("ann.edit.field.endDate")}</label>
               <input type="date" className="form-input" value={form.endDate} onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))} />
             </div>
           </div>
 
           <div className="form-group">
-            <label className="form-label">내용 *</label>
+            <label className="form-label">{t("ann.edit.field.content")} *</label>
             <textarea
               className="form-textarea"
               rows={10}
-              placeholder="공지 내용을 입력하세요..."
+              placeholder={t("ann.edit.field.contentPlaceholder")}
               value={form.content}
               onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
               style={{ resize: "vertical" }}
@@ -170,7 +188,7 @@ function AnnouncementEdit() {
 
         {/* 첨부파일 */}
         <div className="form-card">
-          <h3 style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "1rem" }}>첨부파일</h3>
+          <h3 style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "1rem" }}>{t("ann.edit.attachTitle")}</h3>
           {form.attachments.map((att, idx) => (
             <div key={idx} style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.5rem", background: "#f8fafc", borderRadius: "6px", marginBottom: "0.5rem" }}>
               <span className="material-symbols-outlined" style={{ color: "var(--primary)", fontSize: "1.25rem" }}>attach_file</span>
@@ -183,16 +201,16 @@ function AnnouncementEdit() {
           <input type="file" ref={fileInputRef} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); }} style={{ display: "none" }} />
           <button className="btn btn--outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
             <span className="material-symbols-outlined">upload_file</span>
-            {isUploading ? "업로드 중..." : "파일 추가"}
+            {isUploading ? t("ann.edit.uploading") : t("ann.edit.addFile")}
           </button>
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-          <button className="btn btn--outline" onClick={() => navigate("/announcements")}>취소</button>
-          <button className="btn btn--outline" onClick={() => handleSave("draft")} disabled={isSaving}>임시저장</button>
+          <button className="btn btn--outline" onClick={() => navigate("/announcements")}>{t("common.cancel")}</button>
+          <button className="btn btn--outline" onClick={() => handleSave("draft")} disabled={isSaving}>{t("ann.edit.saveDraft")}</button>
           <button className="btn btn--primary" onClick={() => handleSave("published")} disabled={isSaving}>
             <span className="material-symbols-outlined">publish</span>
-            {isSaving ? "게시 중..." : "게시"}
+            {isSaving ? t("ann.edit.publishing") : t("ann.edit.publish")}
           </button>
         </div>
       </div>

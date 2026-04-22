@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { loadData } from "../../utils/fileStorage";
 import { loadAllAdmins, saveAdminUser, deleteAdminUser, AdminUser } from "../../utils/adminSecurity";
 import { AdminRole, roleLabels } from "../../types/admin";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface AdminManagementProps {
   currentUser?: AdminUser | null;
@@ -16,18 +17,27 @@ interface Member {
 }
 
 function AdminManagement({ currentUser }: AdminManagementProps) {
+  const { t, locale } = useLocale();
+  const dateLocale = locale === "ko" ? "ko-KR" : "en-US";
+
+  const roleLabel = (role: AdminRole): string => {
+    const key = `role.${role}`;
+    const translated = t(key as any);
+    return translated === key ? roleLabels[role] : translated;
+  };
+
   const [admins, setAdmins] = useState<AdminUser[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // 새 관리자 초대 폼
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<AdminRole>("member");
-  const [inviteMemberId, setInviteMemberId] = useState("");
   const [inviteMemberName, setInviteMemberName] = useState("");
 
   // 역할 수정 폼
@@ -65,8 +75,20 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
     setEditingAdmin(null);
   };
 
+  const openInviteModal = () => {
+    setInviteEmail("");
+    setInviteRole("member");
+    setInviteMemberName("");
+    setInviteModalOpen(true);
+  };
+
+  const closeInviteModal = () => {
+    if (isSaving) return;
+    setInviteModalOpen(false);
+  };
+
   const handleInvite = async () => {
-    if (!inviteEmail.trim()) { alert("이메일을 입력해주세요."); return; }
+    if (!inviteEmail.trim()) { alert(t("adminMgmt.err.emailRequired")); return; }
     // 초대된 사용자는 다음 번 구글 로그인 때 자동으로 admin으로 등록됨
     // 여기서는 Firestore에 "초대된 이메일" 레코드를 미리 만들어 놓는 방식
     setIsSaving(true);
@@ -75,7 +97,7 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
         id: `invited-${Date.now()}`,  // 실제 구글 로그인 시 UID로 교체됨
         email: inviteEmail.trim().toLowerCase(),
         displayName: inviteMemberName || inviteEmail.split("@")[0],
-        memberId: inviteMemberId,
+        memberId: "",
         memberName: inviteMemberName,
         username: inviteEmail.split("@")[0],
         role: inviteRole,
@@ -83,13 +105,10 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
       };
       await saveAdminUser(newAdmin);
       setAdmins((prev) => [...prev, newAdmin]);
-      setInviteEmail("");
-      setInviteRole("member");
-      setInviteMemberId("");
-      setInviteMemberName("");
-      alert("관리자가 등록되었습니다. 해당 구글 계정으로 로그인하면 자동 연결됩니다.");
+      setInviteModalOpen(false);
+      alert(t("adminMgmt.success.registered"));
     } catch (e: any) {
-      alert(`등록 실패: ${e.message}`);
+      alert(t("adminMgmt.err.registerFailed", { msg: e.message }));
     } finally {
       setIsSaving(false);
     }
@@ -109,34 +128,45 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
       setAdmins((prev) => prev.map((a) => (a.id === editingAdmin.id ? updated : a)));
       closeModal();
     } catch (e: any) {
-      alert(`저장 실패: ${e.message}`);
+      alert(t("adminMgmt.err.saveFailed", { msg: e.message }));
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async (adminId: string) => {
-    if (adminId === currentUser?.id) { alert("자기 자신은 삭제할 수 없습니다."); return; }
+    if (adminId === currentUser?.id) { alert(t("adminMgmt.err.deleteSelf")); return; }
     try {
       await deleteAdminUser(adminId);
       setAdmins((prev) => prev.filter((a) => a.id !== adminId));
     } catch (e: any) {
-      alert(`삭제 실패: ${e.message}`);
+      alert(t("adminMgmt.err.deleteFailed", { msg: e.message }));
     }
     setDeleteConfirm(null);
   };
 
-  if (isLoading) return <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)" }}>불러오는 중...</div>;
+  if (isLoading) return <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)" }}>{t("adminMgmt.loading")}</div>;
+
+  const columnCount = isSuperAdmin ? 5 : 4;
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+      <div className="settings-section__header-row">
         <div>
-          <h3 style={{ fontSize: "1.125rem", fontWeight: 600, margin: 0 }}>관리자 계정</h3>
-          <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", margin: "0.25rem 0 0" }}>
-            구글 계정으로 로그인하는 관리자를 관리합니다.
+          <h2 className="settings-section__title">
+            <span className="material-symbols-outlined">admin_panel_settings</span>
+            {t("adminMgmt.title")}
+          </h2>
+          <p className="settings-section__description">
+            {t("adminMgmt.description")}
           </p>
         </div>
+        {isSuperAdmin && (
+          <button className="settings-btn settings-btn--primary" onClick={openInviteModal}>
+            <span className="material-symbols-outlined">person_add</span>
+            {t("adminMgmt.register")}
+          </button>
+        )}
       </div>
 
       {/* 관리자 목록 */}
@@ -144,14 +174,19 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
         <table className="ledger-table">
           <thead>
             <tr>
-              <th>이름</th>
-              <th>이메일</th>
-              <th>권한</th>
-              <th>마지막 로그인</th>
-              {isSuperAdmin && <th style={{ width: "80px", textAlign: "center" }}>관리</th>}
+              <th>{t("adminMgmt.col.name")}</th>
+              <th>{t("adminMgmt.col.email")}</th>
+              <th>{t("adminMgmt.col.role")}</th>
+              <th>{t("adminMgmt.col.lastLogin")}</th>
+              {isSuperAdmin && <th style={{ width: "80px", textAlign: "center" }}>{t("adminMgmt.col.actions")}</th>}
             </tr>
           </thead>
           <tbody>
+            {admins.length === 0 && (
+              <tr>
+                <td colSpan={columnCount} className="table-empty">{t("adminMgmt.empty")}</td>
+              </tr>
+            )}
             {admins.map((admin) => (
               <tr key={admin.id}>
                 <td>
@@ -165,18 +200,18 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
                     )}
                     <span style={{ fontWeight: 600 }}>{admin.displayName || admin.email}</span>
                     {admin.id === currentUser?.id && (
-                      <span style={{ fontSize: "0.7rem", padding: "1px 6px", background: "#eff6ff", color: "#16649c", borderRadius: "10px" }}>나</span>
+                      <span style={{ fontSize: "0.7rem", padding: "1px 6px", background: "#eff6ff", color: "#16649c", borderRadius: "10px" }}>{t("adminMgmt.selfBadge")}</span>
                     )}
                   </div>
                 </td>
                 <td style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>{admin.email}</td>
                 <td>
                   <span className={`status-badge status-badge--${admin.role === "super" ? "registered" : admin.role === "finance" ? "visitor" : "moved"}`}>
-                    {roleLabels[admin.role]}
+                    {roleLabel(admin.role)}
                   </span>
                 </td>
                 <td style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-                  {admin.lastLogin ? new Date(admin.lastLogin).toLocaleString("ko-KR") : "-"}
+                  {admin.lastLogin ? new Date(admin.lastLogin).toLocaleString(dateLocale) : "-"}
                 </td>
                 {isSuperAdmin && (
                   <td>
@@ -198,36 +233,61 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
         </table>
       </div>
 
-      {/* 새 관리자 초대 (슈퍼 관리자만) */}
-      {isSuperAdmin && (
-        <div className="form-card">
-          <h4 style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "1rem" }}>관리자 추가</h4>
-          <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
-            추가할 관리자의 구글 이메일을 등록하세요. 해당 계정으로 구글 로그인 시 자동으로 접근 권한이 부여됩니다.
-          </p>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">구글 이메일 *</label>
-              <input type="email" className="form-input" placeholder="example@gmail.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
+      {/* 관리자 등록 모달 */}
+      {inviteModalOpen && (
+        <div className="modal-overlay" onClick={closeInviteModal}>
+          <div className="modal" style={{ width: "460px" }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h3 className="modal__title">{t("adminMgmt.invite.title")}</h3>
+              <button className="modal__close" onClick={closeInviteModal}><span className="material-symbols-outlined">close</span></button>
             </div>
-            <div className="form-group">
-              <label className="form-label">권한</label>
-              <select className="form-select" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as AdminRole)}>
-                <option value="super">슈퍼 관리자</option>
-                <option value="finance">재정 관리자</option>
-                <option value="member">성도 관리자</option>
-              </select>
+            <div className="modal__content">
+              <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", margin: "0 0 1rem", lineHeight: 1.55 }}>
+                {t("adminMgmt.invite.description")}
+              </p>
+
+              <div className="form-group">
+                <label className="form-label">{t("adminMgmt.invite.emailLabel")} *</label>
+                <input
+                  type="email"
+                  className="form-input"
+                  placeholder={t("adminMgmt.invite.emailPlaceholder")}
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">{t("adminMgmt.invite.roleLabel")}</label>
+                <select
+                  className="form-select"
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as AdminRole)}
+                  disabled={isSaving}
+                >
+                  <option value="super">{roleLabel("super")}</option>
+                  <option value="finance">{roleLabel("finance")}</option>
+                  <option value="member">{roleLabel("member")}</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">{t("adminMgmt.invite.displayNameLabel")}</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder={t("adminMgmt.invite.displayNamePlaceholder")}
+                  value={inviteMemberName}
+                  onChange={(e) => setInviteMemberName(e.target.value)}
+                  disabled={isSaving}
+                />
+              </div>
             </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">표시 이름</label>
-              <input type="text" className="form-input" placeholder="홍길동" value={inviteMemberName} onChange={(e) => setInviteMemberName(e.target.value)} />
-            </div>
-            <div className="form-group" style={{ display: "flex", alignItems: "flex-end" }}>
-              <button className="btn btn--primary" onClick={handleInvite} disabled={isSaving} style={{ width: "100%" }}>
-                <span className="material-symbols-outlined">person_add</span>
-                {isSaving ? "등록 중..." : "관리자 등록"}
+            <div className="modal__footer">
+              <button className="btn btn--outline" onClick={closeInviteModal} disabled={isSaving}>{t("common.cancel")}</button>
+              <button className="btn btn--primary" onClick={handleInvite} disabled={isSaving}>
+                {isSaving ? t("adminMgmt.invite.submitting") : t("adminMgmt.invite.submit")}
               </button>
             </div>
           </div>
@@ -239,7 +299,7 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
         <div className="modal-overlay">
           <div className="modal" style={{ width: "420px" }}>
             <div className="modal__header">
-              <h3 className="modal__title">관리자 권한 수정</h3>
+              <h3 className="modal__title">{t("adminMgmt.edit.title")}</h3>
               <button className="modal__close" onClick={closeModal}><span className="material-symbols-outlined">close</span></button>
             </div>
             <div className="modal__content">
@@ -247,22 +307,22 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
                 {editingAdmin.email}
               </p>
               <div className="form-group">
-                <label className="form-label">권한</label>
+                <label className="form-label">{t("adminMgmt.invite.roleLabel")}</label>
                 <select className="form-select" value={editRole} onChange={(e) => setEditRole(e.target.value as AdminRole)}>
-                  <option value="super">슈퍼 관리자</option>
-                  <option value="finance">재정 관리자</option>
-                  <option value="member">성도 관리자</option>
+                  <option value="super">{roleLabel("super")}</option>
+                  <option value="finance">{roleLabel("finance")}</option>
+                  <option value="member">{roleLabel("member")}</option>
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">표시 이름</label>
+                <label className="form-label">{t("adminMgmt.invite.displayNameLabel")}</label>
                 <input type="text" className="form-input" value={editMemberName} onChange={(e) => setEditMemberName(e.target.value)} />
               </div>
             </div>
             <div className="modal__footer">
-              <button className="btn btn--outline" onClick={closeModal}>취소</button>
+              <button className="btn btn--outline" onClick={closeModal}>{t("common.cancel")}</button>
               <button className="btn btn--primary" onClick={handleSaveEdit} disabled={isSaving}>
-                {isSaving ? "저장 중..." : "저장"}
+                {isSaving ? t("adminMgmt.edit.saving") : t("adminMgmt.edit.save")}
               </button>
             </div>
           </div>
@@ -276,17 +336,17 @@ function AdminManagement({ currentUser }: AdminManagementProps) {
             <div className="modal__header">
               <h3 className="modal__title" style={{ color: "var(--danger)" }}>
                 <span className="material-symbols-outlined" style={{ verticalAlign: "bottom", marginRight: "6px" }}>warning</span>
-                관리자 삭제
+                {t("adminMgmt.delete.title")}
               </h3>
               <button className="modal__close" onClick={() => setDeleteConfirm(null)}><span className="material-symbols-outlined">close</span></button>
             </div>
             <div className="modal__content">
-              <p>이 관리자를 삭제하시겠습니까?</p>
-              <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginTop: "0.5rem" }}>삭제된 계정은 더 이상 로그인할 수 없습니다.</p>
+              <p>{t("adminMgmt.delete.body")}</p>
+              <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginTop: "0.5rem" }}>{t("adminMgmt.delete.warning")}</p>
             </div>
             <div className="modal__footer">
-              <button className="btn btn--outline" onClick={() => setDeleteConfirm(null)}>취소</button>
-              <button className="btn btn--danger" onClick={() => handleDelete(deleteConfirm)}>삭제</button>
+              <button className="btn btn--outline" onClick={() => setDeleteConfirm(null)}>{t("common.cancel")}</button>
+              <button className="btn btn--danger" onClick={() => handleDelete(deleteConfirm)}>{t("common.delete")}</button>
             </div>
           </div>
         </div>

@@ -4,13 +4,18 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { Church } from "../../types/church";
 import { useMyChurchId } from "../../components/RequireMyChurch";
+import PortalInquiryModal from "../../components/PortalInquiryModal";
+import { useLocale } from "../../i18n/LocaleContext";
+import { LanguageSelector } from "../../i18n/LanguageSelector";
 
 function PortalLayout() {
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const myChurchId = useMyChurchId();
   const [church, setChurch] = useState<Church | null>(null);
+  const [inquiryDefault, setInquiryDefault] = useState<"portal_registration" | "portal_general" | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -30,13 +35,13 @@ function PortalLayout() {
   }, [myChurchId]);
 
   const navItems = [
-    { path: "/", label: "홈", icon: "home", end: true },
-    { path: "/notices", label: "소식", icon: "campaign" },
-    { path: "/schedule", label: "일정", icon: "calendar_month" },
-    { path: "/churches", label: myChurchId ? "교회 변경" : "교회 선택", icon: "swap_horiz" },
+    { path: "/", label: t("portal.nav.home"), icon: "home", end: true },
+    { path: "/notices", label: t("portal.nav.notices"), icon: "campaign" },
+    { path: "/schedule", label: t("portal.nav.schedule"), icon: "calendar_month" },
+    { path: "/churches", label: t(myChurchId ? "portal.nav.changeChurch" : "portal.nav.selectChurch"), icon: "swap_horiz" },
   ];
 
-  const logoTitle = church?.name || "시온 교회 포탈";
+  const logoTitle = church?.name || t("portal.defaultTitle");
   const logoSubtitle = church ? (church.tagline || "CHURCH PORTAL") : "ZION CHURCH PORTAL";
 
   return (
@@ -44,12 +49,28 @@ function PortalLayout() {
       {/* 상단 유틸리티 바 */}
       <div style={{ background: "#0f172a", color: "#cbd5e1", fontSize: "0.75rem" }}>
         <div style={{ maxWidth: "1240px", margin: "0 auto", padding: "0 1.25rem", height: "2rem", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "1.25rem" }}>
+          <LanguageSelector
+            variant="compact"
+            style={{
+              color: "#cbd5e1",
+              fontSize: "0.75rem",
+              padding: "2px 4px",
+              borderRadius: "4px",
+            }}
+          />
+          <span style={{ color: "#334155" }}>|</span>
           <Link to="/admin/login" style={{ color: "#cbd5e1", textDecoration: "none", display: "flex", alignItems: "center", gap: "0.25rem" }}>
             <span className="material-symbols-outlined" style={{ fontSize: "0.95rem" }}>manage_accounts</span>
-            관리자 로그인
+            {t("portal.util.adminLogin")}
           </Link>
           <span style={{ color: "#334155" }}>|</span>
-          <a href="mailto:farmyon@gmail.com" style={{ color: "#cbd5e1", textDecoration: "none" }}>문의</a>
+          <button
+            type="button"
+            onClick={() => setInquiryDefault("portal_general")}
+            style={{ color: "#cbd5e1", background: "transparent", border: "none", cursor: "pointer", padding: 0, fontSize: "0.75rem", fontFamily: "inherit" }}
+          >
+            {t("portal.util.inquiry")}
+          </button>
         </div>
       </div>
 
@@ -150,13 +171,12 @@ function PortalLayout() {
                 </div>
                 <span style={{ fontWeight: 700, fontSize: "1rem", color: "white" }}>{logoTitle}</span>
               </div>
-              <p style={{ fontSize: "0.8rem", lineHeight: 1.7, color: "#94a3b8", margin: 0 }}>
-                교회와 성도를 잇는<br />
-                크리스천 커뮤니티 포탈
+              <p style={{ fontSize: "0.8rem", lineHeight: 1.7, color: "#94a3b8", margin: 0, whiteSpace: "pre-line" }}>
+                {t("portal.footer.tagline")}
               </p>
             </div>
             <div>
-              <h4 style={{ fontSize: "0.85rem", fontWeight: 700, color: "white", marginBottom: "0.875rem" }}>바로가기</h4>
+              <h4 style={{ fontSize: "0.85rem", fontWeight: 700, color: "white", marginBottom: "0.875rem" }}>{t("portal.footer.shortcut")}</h4>
               <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {navItems.map((n) => (
                   <li key={n.path}>
@@ -166,16 +186,24 @@ function PortalLayout() {
               </ul>
             </div>
             <div>
-              <h4 style={{ fontSize: "0.85rem", fontWeight: 700, color: "white", marginBottom: "0.875rem" }}>관리</h4>
+              <h4 style={{ fontSize: "0.85rem", fontWeight: 700, color: "white", marginBottom: "0.875rem" }}>{t("portal.footer.admin")}</h4>
               <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                <li><Link to="/admin/login" style={{ color: "#cbd5e1", textDecoration: "none", fontSize: "0.85rem" }}>관리자 로그인</Link></li>
-                <li><a href="mailto:farmyon@gmail.com" style={{ color: "#cbd5e1", textDecoration: "none", fontSize: "0.85rem" }}>교회 등록 문의</a></li>
+                <li><Link to="/admin/login" style={{ color: "#cbd5e1", textDecoration: "none", fontSize: "0.85rem" }}>{t("portal.util.adminLogin")}</Link></li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setInquiryDefault("portal_registration")}
+                    style={{ color: "#cbd5e1", background: "transparent", border: "none", cursor: "pointer", padding: 0, fontSize: "0.85rem", fontFamily: "inherit" }}
+                  >
+                    {t("portal.footer.churchInquiry")}
+                  </button>
+                </li>
               </ul>
             </div>
           </div>
           <div style={{ borderTop: "1px solid #1e293b", paddingTop: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-            <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>© {new Date().getFullYear()} Church Portal. All rights reserved.</p>
-            <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>Powered by Firebase</p>
+            <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>{t("portal.footer.copyright", { year: new Date().getFullYear() })}</p>
+            <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>{t("portal.footer.poweredBy")}</p>
           </div>
         </div>
       </footer>
@@ -189,6 +217,13 @@ function PortalLayout() {
           .portal-mobile-nav { display: none !important; }
         }
       `}</style>
+
+      {inquiryDefault && (
+        <PortalInquiryModal
+          defaultContext={inquiryDefault}
+          onClose={() => setInquiryDefault(null)}
+        />
+      )}
     </div>
   );
 }

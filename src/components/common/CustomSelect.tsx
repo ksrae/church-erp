@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface Option {
   value: string;
@@ -18,10 +19,12 @@ export function CustomSelect({
   value,
   onChange,
   options,
-  placeholder = "선택하세요",
+  placeholder,
   disabled = false,
   className = "",
 }: CustomSelectProps) {
+  const { t } = useLocale();
+  const effectivePlaceholder = placeholder ?? t("common.selectPlaceholder");
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -87,7 +90,7 @@ export function CustomSelect({
         }}
       >
         <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {selectedOption ? selectedOption.label : placeholder}
+          {selectedOption ? selectedOption.label : effectivePlaceholder}
         </span>
 
         {/* Arrow Icon */}
@@ -131,7 +134,7 @@ export function CustomSelect({
         >
           {options.length === 0 ? (
             <div style={{ padding: "0.75rem 1rem", color: "#9ca3af", fontSize: "0.875rem" }}>
-              옵션이 없습니다
+              {t("customSelect.noOptions")}
             </div>
           ) : (
             options.map((option) => (

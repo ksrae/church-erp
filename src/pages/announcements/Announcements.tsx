@@ -2,15 +2,23 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, getDocs, deleteDoc, doc, query, orderBy } from "firebase/firestore";
 import { db } from "../../firebase";
-import { Announcement, categoryLabels, categoryColors } from "../../types/announcement";
+import { Announcement, AnnouncementCategory, categoryLabels, categoryColors } from "../../types/announcement";
 import { logActivity } from "../../utils/auditLog";
+import { useLocale } from "../../i18n/LocaleContext";
 
 function Announcements() {
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+
+  const categoryLabel = (cat: AnnouncementCategory): string => {
+    const key = `announcement.category.${cat}`;
+    const translated = t(key as any);
+    return translated === key ? categoryLabels[cat] : translated;
+  };
 
   useEffect(() => { loadData(); }, []);
 
@@ -25,24 +33,29 @@ function Announcements() {
   };
 
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`"${title}" 공지를 삭제하시겠습니까?`)) return;
+    if (!confirm(t("ann.list.deleteConfirm", { title }))) return;
     await deleteDoc(doc(db, "announcements", id));
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-    await logActivity("ANNOUNCEMENT", "공지 삭제", `"${title}" 공지가 삭제되었습니다.`);
+    await logActivity(
+      "ANNOUNCEMENT",
+      t("ann.audit.deleteTitle"),
+      t("ann.audit.deleteBody", { title }),
+    );
   };
 
-  const getStatusLabel = (a: Announcement) => {
+  type StatusKey = "draft" | "ended" | "scheduled" | "published";
+  const getStatusInfo = (a: Announcement): { key: StatusKey; label: string; color: string; bg: string } => {
     const today = new Date().toISOString().split("T")[0];
-    if (a.status === "draft") return { label: "임시저장", color: "#64748b", bg: "#f1f5f9" };
-    if (a.endDate && a.endDate < today) return { label: "게시종료", color: "#9ca3af", bg: "#f1f5f9" };
-    if (a.startDate > today) return { label: "예약", color: "#d97706", bg: "#fef3c7" };
-    return { label: "게시중", color: "#16a34a", bg: "#dcfce7" };
+    if (a.status === "draft") return { key: "draft", label: t("ann.status.draft"), color: "#64748b", bg: "#f1f5f9" };
+    if (a.endDate && a.endDate < today) return { key: "ended", label: t("ann.status.ended"), color: "#9ca3af", bg: "#f1f5f9" };
+    if (a.startDate > today) return { key: "scheduled", label: t("ann.status.scheduled"), color: "#d97706", bg: "#fef3c7" };
+    return { key: "published", label: t("ann.status.published"), color: "#16a34a", bg: "#dcfce7" };
   };
 
   const filtered = announcements.filter((a) => {
-    const statusInfo = getStatusLabel(a);
+    const info = getStatusInfo(a);
     if (filterCategory !== "all" && a.category !== filterCategory) return false;
-    if (filterStatus !== "all" && statusInfo.label !== filterStatus) return false;
+    if (filterStatus !== "all" && info.key !== filterStatus) return false;
     return true;
   });
 
@@ -51,12 +64,12 @@ function Announcements() {
       <div className="page-header">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <h1 className="page-header__title">공지/소식 관리</h1>
-            <p className="page-header__description">성도 포탈에 표시할 공지사항과 소식을 관리합니다.</p>
+            <h1 className="page-header__title">{t("ann.list.pageTitle")}</h1>
+            <p className="page-header__description">{t("ann.list.pageDescription")}</p>
           </div>
           <button className="btn btn--primary" onClick={() => navigate("/announcements/new")}>
             <span className="material-symbols-outlined">add</span>
-            공지 작성
+            {t("ann.list.create")}
           </button>
         </div>
       </div>
@@ -64,35 +77,33 @@ function Announcements() {
       {/* Filters */}
       <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
         <select className="form-select" style={{ width: "auto" }} value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
-          <option value="all">전체 카테고리</option>
-          <option value="notice">공지</option>
-          <option value="education">교육</option>
-          <option value="event">행사</option>
-          <option value="pastoral">목양편지</option>
-          <option value="other">기타</option>
+          <option value="all">{t("ann.list.filterAllCategory")}</option>
+          {(Object.keys(categoryLabels) as AnnouncementCategory[]).map((k) => (
+            <option key={k} value={k}>{categoryLabel(k)}</option>
+          ))}
         </select>
         <select className="form-select" style={{ width: "auto" }} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="all">전체 상태</option>
-          <option value="게시중">게시중</option>
-          <option value="임시저장">임시저장</option>
-          <option value="게시종료">게시종료</option>
-          <option value="예약">예약</option>
+          <option value="all">{t("ann.list.filterAllStatus")}</option>
+          <option value="published">{t("ann.status.published")}</option>
+          <option value="draft">{t("ann.status.draft")}</option>
+          <option value="ended">{t("ann.status.ended")}</option>
+          <option value="scheduled">{t("ann.status.scheduled")}</option>
         </select>
-        <span style={{ color: "var(--text-secondary)", fontSize: "0.875rem", alignSelf: "center" }}>{filtered.length}개</span>
+        <span style={{ color: "var(--text-secondary)", fontSize: "0.875rem", alignSelf: "center" }}>{t("ann.list.countUnit", { n: filtered.length })}</span>
       </div>
 
       {isLoading ? (
-        <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-secondary)" }}>불러오는 중...</div>
+        <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-secondary)" }}>{t("ann.list.loading")}</div>
       ) : filtered.length === 0 ? (
         <div className="form-card" style={{ textAlign: "center", padding: "3rem" }}>
           <span className="material-symbols-outlined" style={{ fontSize: "3rem", display: "block", marginBottom: "0.5rem", color: "#cbd5e1" }}>campaign</span>
-          <p style={{ color: "var(--text-secondary)" }}>공지사항이 없습니다.</p>
-          <button className="btn btn--primary" onClick={() => navigate("/announcements/new")} style={{ marginTop: "1rem" }}>첫 공지 작성하기</button>
+          <p style={{ color: "var(--text-secondary)" }}>{t("ann.list.empty")}</p>
+          <button className="btn btn--primary" onClick={() => navigate("/announcements/new")} style={{ marginTop: "1rem" }}>{t("ann.list.firstCreate")}</button>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {filtered.map((a) => {
-            const status = getStatusLabel(a);
+            const status = getStatusInfo(a);
             const catColor = categoryColors[a.category];
             return (
               <div key={a.id} className="form-card" style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
@@ -104,7 +115,7 @@ function Announcements() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.375rem", flexWrap: "wrap" }}>
                     <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: "12px", background: catColor.bg, color: catColor.text, fontWeight: 600 }}>
-                      {categoryLabels[a.category]}
+                      {categoryLabel(a.category)}
                     </span>
                     <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: "12px", background: status.bg, color: status.color }}>
                       {status.label}
@@ -116,7 +127,7 @@ function Announcements() {
                     {a.attachments.length > 0 && (
                       <span style={{ display: "flex", alignItems: "center", gap: "2px" }}>
                         <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>attach_file</span>
-                        {a.attachments.length}개
+                        {t("ann.list.attachCount", { n: a.attachments.length })}
                       </span>
                     )}
                   </div>

@@ -1,3 +1,5 @@
+import { useLocale } from "../../i18n/LocaleContext";
+
 interface TransactionFiltersProps {
   startDate: string;
   endDate: string;
@@ -15,10 +17,11 @@ function TransactionFilters({
   onEndDateChange,
   onSearchChange,
 }: TransactionFiltersProps) {
+  const { t } = useLocale();
   return (
     <div className="transaction-filters">
       <div className="filter-group">
-        <label>시작일</label>
+        <label>{t("finance.filters.startDate")}</label>
         <input
           type="date"
           value={startDate}
@@ -26,7 +29,7 @@ function TransactionFilters({
         />
       </div>
       <div className="filter-group">
-        <label>종료일</label>
+        <label>{t("finance.filters.endDate")}</label>
         <input
           type="date"
           value={endDate}
@@ -34,10 +37,10 @@ function TransactionFilters({
         />
       </div>
       <div className="filter-group search">
-        <label>검색</label>
+        <label>{t("finance.filters.search")}</label>
         <input
           type="text"
-          placeholder="설명 또는 계정명 검색..."
+          placeholder={t("finance.filters.searchPlaceholder")}
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
         />

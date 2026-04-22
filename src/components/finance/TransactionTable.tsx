@@ -1,4 +1,5 @@
 import { Transaction, Account } from "../../types/finance";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface TransactionTableProps {
   transactions: Transaction[];
@@ -19,6 +20,7 @@ function TransactionTable({
   onEdit,
   onDelete,
 }: TransactionTableProps) {
+  const { t } = useLocale();
   const getAccountName = (accountId: string): string => {
     const account = accounts.find((a) => a.id === accountId);
     return account?.name || "Unknown";
@@ -30,9 +32,9 @@ function TransactionTable({
         <span className="material-symbols-outlined">
           {type === "income" ? "trending_up" : "trending_down"}
         </span>
-        <p>해당 기간에 {type === "income" ? "수입" : "지출"} 내역이 없습니다.</p>
+        <p>{type === "income" ? t("finance.table.emptyIncome") : t("finance.table.emptyExpense")}</p>
         <p className="sub">
-          "{type === "income" ? "수입" : "지출"} 추가" 버튼을 클릭하여 {type === "income" ? "수입" : "지출"}을 등록해주세요.
+          {type === "income" ? t("finance.table.emptyIncomeHint") : t("finance.table.emptyExpenseHint")}
         </p>
       </div>
     );
@@ -42,12 +44,12 @@ function TransactionTable({
     <table className="transaction-table">
       <thead>
         <tr>
-          <th>날짜</th>
-          <th>계정</th>
-          {type === "income" && <th>성도</th>}
-          <th className="text-right">금액</th>
-          <th>메모</th>
-          <th className="text-center" style={{ width: "8rem" }}>작업</th>
+          <th>{t("finance.table.date")}</th>
+          <th>{t("finance.table.account")}</th>
+          {type === "income" && <th>{t("finance.table.member")}</th>}
+          <th className="text-right">{t("finance.table.amount")}</th>
+          <th>{t("finance.table.memo")}</th>
+          <th className="text-center" style={{ width: "8rem" }}>{t("finance.table.action")}</th>
         </tr>
       </thead>
       <tbody>
@@ -69,14 +71,14 @@ function TransactionTable({
                 <button
                   className="view-detail-btn"
                   onClick={() => onEdit(txn)}
-                  title="수정"
+                  title={t("finance.table.edit")}
                 >
                   <span className="material-symbols-outlined">edit</span>
                 </button>
                 <button
                   className="view-detail-btn delete"
                   onClick={() => onDelete(txn.id)}
-                  title="삭제"
+                  title={t("finance.table.delete")}
                 >
                   <span className="material-symbols-outlined">delete</span>
                 </button>

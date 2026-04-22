@@ -2,10 +2,12 @@ import React, { useEffect, useState } from "react";
 import { ActivityLog, getLogs, LogCategory, deleteLogs } from "../utils/auditLog";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { LayoutOutletContext } from "../components/Layout";
+import { useLocale } from "../i18n/LocaleContext";
 import "../styles/pages.css"; // Reuse existing styles where possible
 
 const Notifications: React.FC = () => {
   const navigate = useNavigate();
+  const { t, locale } = useLocale();
   const { currentUser } = useOutletContext<LayoutOutletContext>();
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -31,6 +33,7 @@ const Notifications: React.FC = () => {
   };
 
   const isSuperUser = currentUser?.role === "super";
+  const dateLocale = locale === "ko" ? "ko-KR" : "en-US";
 
   const handleToggleSelect = (id: string) => {
     const newSelected = new Set(selectedLogIds);
@@ -45,7 +48,7 @@ const Notifications: React.FC = () => {
   const handleDeleteSelected = async () => {
     if (selectedLogIds.size === 0) return;
 
-    if (window.confirm(`${selectedLogIds.size}개의 활동 기록을 삭제하시겠습니까?\n삭제된 내용은 '로그 삭제' 기록에 남게 됩니다.`)) {
+    if (window.confirm(t("notifications.confirmDelete", { count: selectedLogIds.size }))) {
       try {
         await deleteLogs(Array.from(selectedLogIds), currentUser?.username || "SuperUser");
 
@@ -54,7 +57,7 @@ const Notifications: React.FC = () => {
         setIsSelectionMode(false);
         await loadLogs();
       } catch (error) {
-        alert("로그 삭제 중 오류가 발생했습니다.");
+        alert(t("notifications.deleteFailed"));
         console.error(error);
       }
     }
@@ -62,7 +65,7 @@ const Notifications: React.FC = () => {
 
   // Group logs by date
   const groupedLogs = logs.reduce((groups, log) => {
-    const date = new Date(log.timestamp).toLocaleDateString("ko-KR", {
+    const date = new Date(log.timestamp).toLocaleDateString(dateLocale, {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -88,7 +91,7 @@ const Notifications: React.FC = () => {
   };
 
   const formatTime = (isoString: string) => {
-    return new Date(isoString).toLocaleTimeString("ko-KR", {
+    return new Date(isoString).toLocaleTimeString(dateLocale, {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -117,10 +120,10 @@ const Notifications: React.FC = () => {
               >
                 <span className="material-symbols-outlined">arrow_back</span>
               </button>
-              <h1 className="page-header__title" style={{ margin: 0 }}>알림 센터</h1>
+              <h1 className="page-header__title" style={{ margin: 0 }}>{t("notifications.title")}</h1>
             </div>
             <p className="page-header__description" style={{ marginLeft: '3.5rem' }}>
-              시스템의 모든 활동 기록을 확인할 수 있습니다.
+              {t("notifications.description")}
             </p>
           </div>
 
@@ -135,7 +138,7 @@ const Notifications: React.FC = () => {
                     style={{ opacity: selectedLogIds.size === 0 ? 0.5 : 1 }}
                   >
                     <span className="material-symbols-outlined">delete</span>
-                    삭제 ({selectedLogIds.size})
+                    {t("notifications.delete", { count: selectedLogIds.size })}
                   </button>
                   <button
                     className="btn btn--outline"
@@ -144,7 +147,7 @@ const Notifications: React.FC = () => {
                       setSelectedLogIds(new Set());
                     }}
                   >
-                    취소
+                    {t("notifications.cancel")}
                   </button>
                 </>
               ) : (
@@ -153,7 +156,7 @@ const Notifications: React.FC = () => {
                   onClick={() => setIsSelectionMode(true)}
                 >
                   <span className="material-symbols-outlined">checklist</span>
-                  기록 관리
+                  {t("notifications.manage")}
                 </button>
               )}
             </div>
@@ -164,12 +167,12 @@ const Notifications: React.FC = () => {
       <div className="notifications-list">
         {loading ? (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-            기록을 불러오는 중...
+            {t("notifications.loading")}
           </div>
         ) : logs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '4rem', background: 'white', borderRadius: '1rem', border: '1px solid var(--border-color)' }}>
             <span className="material-symbols-outlined" style={{ fontSize: '3rem', color: '#cbd5e1', marginBottom: '1rem' }}>notifications_off</span>
-            <p style={{ color: 'var(--text-secondary)' }}>아직 기록된 활동이 없습니다.</p>
+            <p style={{ color: 'var(--text-secondary)' }}>{t("notifications.empty")}</p>
           </div>
         ) : (
           Object.entries(groupedLogs).map(([date, dayLogs]) => (
@@ -250,7 +253,7 @@ const Notifications: React.FC = () => {
                       <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#94a3b8', display: 'flex', gap: '0.5rem' }}>
                         <span>{log.category}</span>
                         <span>•</span>
-                        <span>{log.user || 'System'}</span>
+                        <span>{log.user || t("notifications.system")}</span>
                       </div>
                     </div>
                   </div>

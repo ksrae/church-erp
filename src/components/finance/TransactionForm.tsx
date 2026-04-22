@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Account, Transaction } from "../../types/finance";
 import { MemberSelect } from "../../components/common/MemberSelect";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface Member {
   id: string;
@@ -20,6 +21,7 @@ interface TransactionFormProps {
 }
 
 function TransactionForm({ transaction, accounts, members, onSave, onCancel }: TransactionFormProps) {
+  const { t } = useLocale();
   const [formData, setFormData] = useState<Transaction>({
     id: "",
     accountId: "",
@@ -31,9 +33,6 @@ function TransactionForm({ transaction, accounts, members, onSave, onCancel }: T
     memo: "",
   });
 
-  // ... (Removed unused dropdown logic)
-
-  // Update form data when transaction prop changes
   useEffect(() => {
     if (transaction) {
       setFormData({
@@ -61,14 +60,13 @@ function TransactionForm({ transaction, accounts, members, onSave, onCancel }: T
       e.stopPropagation();
     }
 
-    // 지출인 경우 설명이 비어있으면 기본값 설정 (화면에선 숨김)
     let finalDescription = formData.description;
     if (formData.type === "expense" && !finalDescription) {
-      finalDescription = "지출";
+      finalDescription = t("finance.txnForm.expenseDefaultDescription");
     }
 
     if (!formData.accountId || !finalDescription || formData.amount <= 0) {
-      alert("계정, 성도(또는 설명), 금액은 필수입니다.");
+      alert(t("finance.txnForm.required"));
       return;
     }
 
@@ -77,13 +75,11 @@ function TransactionForm({ transaction, accounts, members, onSave, onCancel }: T
     onSave(payload);
   };
 
-  // ... (Removed unused filteredMembers and helper functions)
-
   return (
     <form className="transaction-form" onSubmit={handleSubmit}>
       <div className="form-row">
         <div className="form-group">
-          <label>날짜 <span className="required">*</span></label>
+          <label>{t("finance.txnForm.date")} <span className="required">*</span></label>
           <input
             type="date"
             value={formData.date}
@@ -92,7 +88,7 @@ function TransactionForm({ transaction, accounts, members, onSave, onCancel }: T
           />
         </div>
         <div className="form-group">
-          <label>거래 유형</label>
+          <label>{t("finance.txnForm.type")}</label>
           <select
             value={formData.type}
             onChange={(e) => setFormData({
@@ -102,19 +98,19 @@ function TransactionForm({ transaction, accounts, members, onSave, onCancel }: T
               description: ""
             })}
           >
-            <option value="income">수입</option>
-            <option value="expense">지출</option>
+            <option value="income">{t("finance.txnForm.typeIncome")}</option>
+            <option value="expense">{t("finance.txnForm.typeExpense")}</option>
           </select>
         </div>
       </div>
       <div className="form-group">
-        <label>계정 <span className="required">*</span></label>
+        <label>{t("finance.txnForm.account")} <span className="required">*</span></label>
         <select
           value={formData.accountId}
           onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
           required
         >
-          <option value="">계정을 선택하세요</option>
+          <option value="">{t("finance.txnForm.accountPlaceholder")}</option>
           {filteredAccounts.map((account) => (
             <option key={account.id} value={account.id}>
               {account.name}
@@ -125,19 +121,19 @@ function TransactionForm({ transaction, accounts, members, onSave, onCancel }: T
 
       {formData.type === "income" ? (
         <div className="form-group">
-          <label>성도 <span className="required">*</span></label>
+          <label>{t("finance.txnForm.member")} <span className="required">*</span></label>
           <MemberSelect
             value={formData.description}
             onChange={(val: string) => setFormData({ ...formData, description: val })}
             members={members}
             includeAnonymous={true}
-            placeholder="이름을 검색하거나 선택하세요"
+            placeholder={t("finance.txnForm.memberPlaceholder")}
           />
         </div>
       ) : null}
 
       <div className="form-group">
-        <label>금액 <span className="required">*</span></label>
+        <label>{t("finance.txnForm.amount")} <span className="required">*</span></label>
         <input
           type="number"
           value={formData.amount || ""}
@@ -148,11 +144,11 @@ function TransactionForm({ transaction, accounts, members, onSave, onCancel }: T
         />
       </div>
       <div className="form-group">
-        <label>메모</label>
+        <label>{t("finance.txnForm.memo")}</label>
         <textarea
           value={formData.memo}
           onChange={(e) => setFormData({ ...formData, memo: e.target.value })}
-          placeholder={formData.type === "expense" ? "지출 상세 내역을 입력하세요" : "추가 메모를 입력하세요"}
+          placeholder={formData.type === "expense" ? t("finance.txnForm.memoExpensePlaceholder") : t("finance.txnForm.memoIncomePlaceholder")}
           rows={3}
         />
       </div>
@@ -166,14 +162,14 @@ function TransactionForm({ transaction, accounts, members, onSave, onCancel }: T
             onCancel();
           }}
         >
-          취소
+          {t("common.cancel")}
         </button>
         <button
           type="button"
           className={`btn-primary ${formData.type}`}
           onMouseDown={handleSubmit}
         >
-          {transaction?.id ? "수정" : "추가"}
+          {transaction?.id ? t("finance.txnForm.edit") : t("finance.txnForm.add")}
         </button>
       </div>
     </form>

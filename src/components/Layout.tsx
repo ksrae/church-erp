@@ -1,10 +1,11 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { rolePermissions, roleLabels } from "../types/admin";
+import { rolePermissions, AdminRole } from "../types/admin";
 import { AdminUser } from "../utils/adminSecurity";
 import { ActivityLog, getRecentLogs } from "../utils/auditLog";
 import { firebaseSignOut } from "../utils/adminSecurity";
 import { loadData } from "../utils/fileStorage";
+import { useLocale } from "../i18n/LocaleContext";
 
 interface LayoutProps {
   onLogout: () => void;
@@ -23,6 +24,7 @@ export interface LayoutOutletContext {
 
 function Layout({ onLogout, currentUser }: LayoutProps) {
   const navigate = useNavigate();
+  const { t, locale } = useLocale();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [churchSettings, setChurchSettings] = useState<ChurchSettings>({ churchName: "", pastorName: "" });
   const [recentLogs, setRecentLogs] = useState<ActivityLog[]>([]);
@@ -97,29 +99,32 @@ function Layout({ onLogout, currentUser }: LayoutProps) {
     });
   };
 
+  const roleLabel = (role: AdminRole): string => t(`role.${role}` as any);
+  const dateLocale = locale === "ko" ? "ko-KR" : "en-US";
+
   const mainNavItems = [
-    { path: "/", icon: "dashboard", label: "대시보드" },
-    { path: "/members", icon: "groups", label: "성도 관리" },
-    { path: "/finance", icon: "account_balance_wallet", label: "회계/헌금 관리" },
-    { path: "/worship", icon: "church", label: "예배 관리" },
-    { path: "/announcements", icon: "campaign", label: "공지/소식 관리" },
-    { path: "/resources", icon: "folder_open", label: "자료실", disabled: true, badge: "v0.4" },
+    { path: "/", icon: "dashboard", label: t("layout.nav.dashboard") },
+    { path: "/members", icon: "groups", label: t("layout.nav.members") },
+    { path: "/finance", icon: "account_balance_wallet", label: t("layout.nav.finance") },
+    { path: "/worship", icon: "church", label: t("layout.nav.worship") },
+    { path: "/announcements", icon: "campaign", label: t("layout.nav.announcements") },
+    { path: "/resources", icon: "folder_open", label: t("layout.nav.resources"), disabled: true, badge: "v0.4" },
   ];
 
   const supportItems = [
-    { path: "/notifications", icon: "notifications", label: "알림 센터" },
-    { path: "/settings", icon: "settings", label: "설정" },
+    { path: "/notifications", icon: "notifications", label: t("layout.nav.notifications") },
+    { path: "/settings", icon: "settings", label: t("layout.nav.settings") },
   ];
 
   const navItems = mainNavItems.filter((item) => hasAccess(item.path));
 
   const today = new Date();
-  const formattedDate = today.toLocaleDateString("ko-KR", {
+  const formattedDate = today.toLocaleDateString(dateLocale, {
     year: "numeric", month: "long", day: "numeric", weekday: "short",
   });
 
-  const displayName = currentUser?.memberName || currentUser?.username || "관리자";
-  const displayRole = currentUser ? roleLabels[currentUser.role] : "관리자";
+  const displayName = currentUser?.memberName || currentUser?.username || t("layout.defaultAdmin");
+  const displayRole = currentUser ? roleLabel(currentUser.role) : t("layout.defaultAdmin");
 
   return (
     <div className="app-layout">
@@ -134,7 +139,7 @@ function Layout({ onLogout, currentUser }: LayoutProps) {
               </div>
             )}
             <div className="sidebar__logo-text">
-              <h1>{churchSettings.churchName || "교회 포탈"}</h1>
+              <h1>{churchSettings.churchName || t("layout.portalName")}</h1>
               <p>Church Portal v0.3</p>
             </div>
           </div>
@@ -165,7 +170,7 @@ function Layout({ onLogout, currentUser }: LayoutProps) {
           )}
 
           <div className="nav-section">
-            <p className="nav-section__title">지원</p>
+            <p className="nav-section__title">{t("layout.nav.support")}</p>
             {supportItems.map((item) => (
               <NavLink
                 key={item.path}
@@ -185,7 +190,7 @@ function Layout({ onLogout, currentUser }: LayoutProps) {
               style={{ textDecoration: "none" }}
             >
               <span className="material-symbols-outlined">open_in_new</span>
-              <span>성도 포탈 보기</span>
+              <span>{t("layout.nav.viewPortal")}</span>
             </a>
           </div>
         </nav>
@@ -194,7 +199,7 @@ function Layout({ onLogout, currentUser }: LayoutProps) {
           <div
             className="sidebar__user-content sidebar__user-content--clickable"
             onClick={() => navigate("/settings")}
-            title="시스템 설정"
+            title={t("layout.systemSettings")}
           >
             <div className="sidebar__user-avatar" style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark, #0d4f7a) 100%)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: "bold", fontSize: "1rem" }}>
               {displayName.charAt(0)}
@@ -207,7 +212,7 @@ function Layout({ onLogout, currentUser }: LayoutProps) {
             </div>
             <span className="material-symbols-outlined sidebar__user-settings">settings</span>
           </div>
-          <button className="sidebar__logout-btn" onClick={handleLogout} title="로그아웃">
+          <button className="sidebar__logout-btn" onClick={handleLogout} title={t("layout.logout")}>
             <span className="material-symbols-outlined">logout</span>
           </button>
         </div>
@@ -233,13 +238,13 @@ function Layout({ onLogout, currentUser }: LayoutProps) {
               {isNotificationOpen && (
                 <div className="notification-dropdown" style={{ position: "absolute", top: "120%", right: 0, width: "320px", background: "white", borderRadius: "12px", boxShadow: "0 4px 20px rgba(0,0,0,0.15)", border: "1px solid var(--border-color)", zIndex: 1000, overflow: "hidden" }}>
                   <div style={{ padding: "1rem", borderBottom: "1px solid var(--border-color)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <h3 style={{ fontSize: "0.9rem", fontWeight: "bold" }}>알림</h3>
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>최근 5개</span>
+                    <h3 style={{ fontSize: "0.9rem", fontWeight: "bold" }}>{t("layout.notifHeader")}</h3>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>{t("layout.notifRecent")}</span>
                   </div>
                   <div style={{ maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}>
                     {recentLogs.length === 0 ? (
                       <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.875rem" }}>
-                        새로운 알림이 없습니다.
+                        {t("layout.notifEmpty")}
                       </div>
                     ) : (
                       recentLogs.map((log) => (
@@ -251,7 +256,7 @@ function Layout({ onLogout, currentUser }: LayoutProps) {
                               {log.details}
                             </p>
                             <span style={{ fontSize: "0.7rem", color: "#94a3b8" }}>
-                              {new Date(log.timestamp).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} • {log.user || "System"}
+                              {new Date(log.timestamp).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })} • {log.user || "System"}
                             </span>
                           </div>
                         </div>
@@ -262,7 +267,7 @@ function Layout({ onLogout, currentUser }: LayoutProps) {
                     onClick={() => { setIsNotificationOpen(false); navigate("/notifications"); }}
                     style={{ width: "100%", padding: "0.75rem", background: "#f8fafc", border: "none", borderTop: "1px solid var(--border-color)", color: "var(--primary)", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
                   >
-                    전체 알림 보기
+                    {t("layout.notifViewAll")}
                   </button>
                 </div>
               )}

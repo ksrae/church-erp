@@ -32,6 +32,160 @@ const categoryColors: Record<string, { bg: string; text: string; label: string }
   other: { bg: "#f3e8ff", text: "#7c3aed", label: "기타" },
 };
 
+const dashboardStyles = `
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.9) translateY(20px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+  100% { transform: translateY(0px); }
+}
+.kpi-card {
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  border-radius: 20px !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05) !important;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+  position: relative;
+}
+.kpi-card:nth-child(1) { animation-delay: 0.05s; }
+.kpi-card:nth-child(2) { animation-delay: 0.1s; }
+.kpi-card:nth-child(3) { animation-delay: 0.15s; }
+.kpi-card::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 5px;
+  background: linear-gradient(90deg, #3b82f6, #ec4899, #f59e0b);
+  transform: scaleX(0); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: left;
+}
+.kpi-card:hover {
+  transform: translateY(-8px) scale(1.02) !important;
+  box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.25) !important;
+  background: rgba(255, 255, 255, 0.95);
+}
+.kpi-card:hover::after { transform: scaleX(1); }
+.kpi-card__icon {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe) !important;
+  border-radius: 16px !important;
+  animation: float 6s ease-in-out infinite;
+}
+.calendar-card, .events-list-card, .chart-card {
+  transition: all 0.4s ease !important;
+  border-radius: 24px !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.06) !important;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+}
+.calendar-card {
+  animation: popIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards;
+  opacity: 0;
+}
+.events-list-card {
+  animation: popIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s forwards;
+  opacity: 0;
+}
+.chart-card {
+  animation: popIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.4s forwards;
+  opacity: 0;
+}
+.calendar-card:hover, .events-list-card:hover, .chart-card:hover {
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1) !important;
+  background: rgba(255, 255, 255, 0.95);
+}
+.calendar-grid__day {
+  transition: all 0.2s ease !important;
+  border-radius: 12px !important;
+  margin: 2px !important;
+  border: 1px solid transparent !important;
+}
+.calendar-grid__day:hover {
+  transform: scale(1.05) !important;
+  background-color: #f8fafc !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+  border-color: #e2e8f0 !important;
+  z-index: 5;
+}
+.calendar-grid__day.today {
+  background: linear-gradient(135deg, #eff6ff, #e0e7ff) !important;
+  border: 2px solid #3b82f6 !important;
+}
+.calendar-grid__event {
+  transition: all 0.2s ease !important;
+  border-radius: 6px !important;
+}
+.calendar-grid__event:hover {
+  transform: scale(1.05) !important;
+  filter: brightness(1.1) !important;
+}
+.calendar-card__add-btn {
+  border-radius: 100px !important;
+  transition: all 0.3s ease !important;
+  background: linear-gradient(135deg, #3b82f6, #ec4899) !important;
+  border: none !important;
+  color: white !important;
+  padding: 0.5rem 1.25rem !important;
+  font-weight: 700 !important;
+}
+.calendar-card__add-btn:hover {
+  transform: translateY(-2px) scale(1.05) !important;
+  box-shadow: 0 10px 20px rgba(236, 72, 153, 0.3) !important;
+}
+.dashboard {
+  background: 
+    linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.3) 100%),
+    url('https://images.unsplash.com/photo-1558231317-578f7e2d9cc8?q=80&w=2560&auto=format&fit=crop') center/cover fixed !important;
+  padding: 2rem;
+  border-radius: 32px;
+  min-height: 100vh;
+  box-shadow: inset 0 0 100px rgba(255,255,255,0.5);
+}
+.modal {
+  border-radius: 24px !important;
+  animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(25px);
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.35) !important;
+}
+.btn--primary {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6) !important;
+  border: none !important;
+  border-radius: 100px !important;
+  transition: all 0.3s ease !important;
+  font-weight: 600 !important;
+}
+.btn--primary:hover {
+  transform: translateY(-2px) scale(1.05) !important;
+  box-shadow: 0 8px 20px rgba(139, 92, 246, 0.3) !important;
+}
+.form-input, .form-select, .form-textarea {
+  border-radius: 12px !important;
+  transition: all 0.3s ease !important;
+  background-color: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  transform: scale(1.01) !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2) !important;
+  border-color: #8b5cf6 !important;
+  background-color: white !important;
+}
+.event-list-item {
+  transition: all 0.2s ease;
+  border-radius: 16px !important;
+  border: 1px solid #f1f5f9 !important;
+}
+.event-list-item:hover {
+  transform: translateX(4px);
+  background: #f8fafc;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+`;
+
 function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalMembers: 0,
@@ -319,6 +473,7 @@ function Dashboard() {
 
   return (
     <div className="dashboard">
+      <style>{dashboardStyles}</style>
       {/* KPI Cards */}
       <div className="dashboard__kpi-grid">
         <div className="kpi-card">

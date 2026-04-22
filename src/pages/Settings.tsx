@@ -1,6 +1,9 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useOutletContext } from "react-router-dom";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { db, storage } from "../firebase";
 import { logActivity } from "../utils/auditLog";
 import {
   currencies,
@@ -11,7 +14,13 @@ import {
 import { loadData, saveData } from "../utils/fileStorage";
 import AdminManagement from "../components/settings/AdminManagement";
 import { LayoutOutletContext } from "../components/Layout";
-import { MemberSelect } from "../components/common/MemberSelect";
+import { useLocale } from "../i18n/LocaleContext";
+import { Locale, localeFlags, localeLabels } from "../i18n/locale";
+import { Church } from "../types/church";
+import { ChurchChangeRequest, ChurchInfoField } from "../types/changeRequest";
+import { subscribeChurchRequests, markReadByAdmin } from "../utils/changeRequests";
+import ChurchInfoChangeRequestModal from "../components/ChurchInfoChangeRequestModal";
+import { useAuth } from "../App";
 
 const SETTINGS_STORAGE_KEY = "church_erp_settings";
 
@@ -25,20 +34,11 @@ interface ChurchSettings {
   logo?: string;
 }
 
-interface Member {
-  id: string;
-  name: string;
-  role?: string;
-  profileImage?: string;
-}
-
 interface SettingsData {
   church: ChurchSettings;
   theme: "light" | "dark" | "system";
   language: "ko" | "en";
   currency: CurrencyCode;
-  autoBackup: boolean;
-  backupInterval: "daily" | "weekly" | "monthly";
 }
 
 interface Account {
@@ -69,41 +69,48 @@ const defaultSettings: SettingsData = {
   theme: "light",
   language: "ko",
   currency: "KRW" as CurrencyCode,
-  autoBackup: true,
-  backupInterval: "weekly",
 };
 
 function Settings() {
+  const { t, locale, setLocale } = useLocale();
   const [settings, setSettings] = useState<SettingsData>(defaultSettings);
-  const [activeTab, setActiveTab] = useState<"church" | "system" | "data" | "about" | "accounts" | "admin">("church");
+  const [activeTab, setActiveTab] = useState<"church" | "system" | "about" | "accounts" | "admin">("church");
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  // Pastor Dropdown State (Removed)
-  const [members, setMembers] = useState<Member[]>([]);
-
-  // Removed handleClickOutside effect
-
-  // Load Members for Dropdown
-  useEffect(() => {
-    const fetchMembers = async () => {
-      const data = await loadData<Member[]>("members");
-      if (data) {
-        setMembers(data);
-      } else {
-        // Fallback to local storage if needed, similar to Members page
-        const savedMembers = localStorage.getItem("church_erp_members");
-        if (savedMembers) {
-          setMembers(JSON.parse(savedMembers));
-        }
-      }
-    };
-    fetchMembers();
-  }, []);
+  // 담임목사 선택 드롭다운 제거됨 — 교회 등록 시점의 pastorName 을 사용 (수정은 요청 플로우로)
 
   // Current user from Layout context
   const { currentUser } = useOutletContext<LayoutOutletContext>();
+
+  // ── 교회 기본 정보: Firestore churches/{id} 에서 로드되며 관리자가 직접 수정할 수 없음 ──
+  const { auth: authState } = useAuth();
+  const churchId = authState.type === "church" ? authState.admin.churchId : null;
+  const [church, setChurch] = useState<Church | null>(null);
+  const [changeRequests, setChangeRequests] = useState<ChurchChangeRequest[]>([]);
+  const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
+  const [changeRequestSuccess, setChangeRequestSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!churchId) return;
+    const unsub = onSnapshot(doc(db, "churches", churchId), (snap) => {
+      if (snap.exists()) setChurch({ id: snap.id, ...snap.data() } as Church);
+    });
+    return unsub;
+  }, [churchId]);
+
+  useEffect(() => {
+    if (!churchId) return;
+    const unsub = subscribeChurchRequests(churchId, setChangeRequests);
+    return unsub;
+  }, [churchId]);
+
+  // 새로 반영/반려된 요청을 관리자가 자동으로 확인 처리 — "읽음" 표시 용도
+  useEffect(() => {
+    changeRequests
+      .filter((r) => r.status !== "pending" && !r.readByAdmin)
+      .forEach((r) => { markReadByAdmin(r.id).catch(() => {}); });
+  }, [changeRequests]);
 
   // Accounts State
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -126,7 +133,7 @@ function Settings() {
 
   const handleSaveAccount = async () => {
     if (!currentAccount.name || !currentAccount.type) {
-      setSaveMessage("필수 정보를 입력해주세요.");
+      setSaveMessage(t("settings.alert.required"));
       return;
     }
 
@@ -154,16 +161,16 @@ function Settings() {
 
       setAccounts(newAccounts);
       setShowAccountModal(false);
-      setSaveMessage("계정이 저장되었습니다.");
+      setSaveMessage(t("settings.alert.accountSaved"));
       setTimeout(() => setSaveMessage(""), 3000);
     } catch (e) {
       console.error(e);
-      setSaveMessage("저장 중 오류가 발생했습니다.");
+      setSaveMessage(t("settings.alert.accountSaveError"));
     }
   };
 
   const handleDeleteAccount = async (id: string) => {
-    if (!confirm("정말 이 계정을 삭제하시겠습니까? 거래 내역이 존재할 경우 문제가 발생할 수 있습니다.")) return;
+    if (!confirm(t("settings.alert.accountDeleteConfirm"))) return;
 
     try {
       const data = await loadData<FinanceData>("finance", "finance.json") || { accounts: [], transactions: [], budgets: [] };
@@ -173,96 +180,11 @@ function Settings() {
       await saveData("finance", data, "finance.json");
 
       setAccounts(newAccounts);
-      setSaveMessage("계정이 삭제되었습니다.");
+      setSaveMessage(t("settings.alert.accountDeleted"));
       setTimeout(() => setSaveMessage(""), 3000);
     } catch (e) {
       console.error(e);
-      setSaveMessage("삭제 중 오류가 발생했습니다.");
-    }
-  };
-
-  // 데이터 백업 (JSON 파일 다운로드) - File Storage 기반
-  const handleBackup = async () => {
-    try {
-      const backupData: Record<string, any> = {};
-
-      // Finance Data
-      const financeData = await loadData("finance", "finance.json");
-      if (financeData) backupData.finance = financeData;
-
-      // 추가 데이터 타입이 있다면 여기서 로드
-      // const membersData = await loadData("members", "members.json");
-      // if (membersData) backupData.members = membersData;
-
-      const dataStr = JSON.stringify(backupData, null, 2);
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `church_erp_backup_${new Date().toISOString().split("T")[0]}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      setSaveMessage("백업 파일이 다운로드되었습니다.");
-      setTimeout(() => setSaveMessage(""), 3000);
-    } catch (e) {
-      console.error(e);
-      setSaveMessage("백업 생성 중 오류가 발생했습니다.");
-    }
-  };
-
-  // 데이터 복원 - File Storage 기반
-  const handleRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string);
-
-        if (data.finance) {
-          await saveData("finance", data.finance, "finance.json");
-        }
-
-        // 다른 데이터 복원 로직 추가 가능
-
-        // 계정 목록 새로고침
-        if (activeTab === "accounts") {
-          const loaded = await loadData<FinanceData>("finance", "finance.json");
-          if (loaded?.accounts) setAccounts(loaded.accounts);
-        }
-
-        setSaveMessage("데이터가 성공적으로 복원되었습니다.");
-        setTimeout(() => setSaveMessage(""), 3000);
-      } catch (e) {
-        console.error(e);
-        setSaveMessage("파일 형식이 올바르지 않거나 복원 중 오류가 발생했습니다.");
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = "";
-  };
-
-  // 시스템 초기화 - File Storage 기반
-  const handleReset = async () => {
-    try {
-      // Finance 초기화
-      await saveData("finance", { accounts: [], transactions: [], budgets: [] }, "finance.json");
-
-      // 설정 초기화
-      setSettings(defaultSettings);
-      await saveData("settings", defaultSettings);
-
-      setAccounts([]);
-      setShowResetConfirm(false);
-      setSaveMessage("모든 데이터가 초기화되었습니다.");
-      setTimeout(() => setSaveMessage(""), 3000);
-    } catch (e) {
-      console.error(e);
-      setSaveMessage("초기화 중 오류가 발생했습니다.");
+      setSaveMessage(t("settings.alert.accountDeleteError"));
     }
   };
 
@@ -348,65 +270,84 @@ function Settings() {
       // Log activity
       await logActivity(
         "SETTINGS",
-        "교회 정보 수정",
-        "설정 페이지에서 정보가 수정되었습니다."
+        t("settings.audit.churchInfoUpdated.title"),
+        t("settings.audit.churchInfoUpdated.body")
       );
 
-      setSaveMessage("설정이 저장되었습니다.");
+      setSaveMessage(t("settings.alert.settingsSaved"));
       setTimeout(() => setSaveMessage(""), 3000);
     } catch (error) {
       console.error("Failed to save settings:", error);
-      setSaveMessage("저장 중 오류가 발생했습니다.");
+      setSaveMessage(t("settings.alert.settingsSaveError"));
     } finally {
       setIsSaving(false);
     }
   };
 
-  // 로고 이미지 업로드 처리
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 로고 이미지 업로드 — Firebase Storage 에 저장하고 churches/{id}.logo 에 URL 기록
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !churchId) return;
 
-    // 이미지 파일 검증
     if (!file.type.startsWith("image/")) {
-      alert("이미지 파일만 업로드 가능합니다.");
+      setSaveMessage(t("settings.alert.logoImageOnly"));
+      setTimeout(() => setSaveMessage(""), 2500);
       return;
     }
-
-    // 5MB 용량 제한
     if (file.size > 5 * 1024 * 1024) {
-      alert("이미지 크기는 5MB 이하여야 합니다.");
+      setSaveMessage(t("settings.alert.logoTooLarge"));
+      setTimeout(() => setSaveMessage(""), 2500);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      handleChurchChange("logo", base64);
-    };
-    reader.readAsDataURL(file);
+    setUploadingLogo(true);
+    try {
+      const ext = file.name.split(".").pop() || "png";
+      const path = `churches/${churchId}/logo_${Date.now()}.${ext}`;
+      const r = storageRef(storage, path);
+      await uploadBytes(r, file);
+      const url = await getDownloadURL(r);
+      await updateDoc(doc(db, "churches", churchId), { logo: url });
+      setChurch((prev) => (prev ? { ...prev, logo: url } : prev));
+      await logActivity("SETTINGS", t("settings.audit.logoChanged.title"), t("settings.audit.logoChanged.body"));
+      setSaveMessage(t("settings.alert.logoSaved"));
+      setTimeout(() => setSaveMessage(""), 2500);
+    } catch (err) {
+      console.error("Failed to upload logo:", err);
+      setSaveMessage(t("settings.alert.logoUploadError"));
+    }
+    setUploadingLogo(false);
+    if (logoInputRef.current) logoInputRef.current.value = "";
   };
 
-  // 교회 정보 변경
-  const handleChurchChange = (field: keyof ChurchSettings, value: string) => {
-    setSettings((prev) => ({
-      ...prev,
-      church: {
-        ...prev.church,
-        [field]: value,
-      },
-    }));
+  const handleLogoRemove = async () => {
+    if (!churchId || !church?.logo) return;
+    if (!confirm(t("settings.alert.logoRemoveConfirm"))) return;
+    try {
+      const prevUrl = church.logo;
+      await updateDoc(doc(db, "churches", churchId), { logo: "" });
+      try { await deleteObject(storageRef(storage, prevUrl)); } catch { /* ignore storage errors */ }
+      setChurch((prev) => (prev ? { ...prev, logo: "" } : prev));
+      await logActivity("SETTINGS", t("settings.audit.logoDeleted.title"), t("settings.audit.logoDeleted.body"));
+      setSaveMessage(t("settings.alert.logoRemoved"));
+      setTimeout(() => setSaveMessage(""), 2500);
+    } catch (err) {
+      console.error("Failed to remove logo:", err);
+      setSaveMessage(t("settings.alert.logoRemoveError"));
+    }
   };
 
 
 
   const tabs = [
-    { id: "church" as const, icon: "church", label: "교회 정보" },
-    { id: "system" as const, icon: "tune", label: "시스템 설정" },
-    { id: "accounts" as const, icon: "category", label: "계정 관리" },
-    { id: "admin" as const, icon: "admin_panel_settings", label: "관리자 관리" },
-    { id: "data" as const, icon: "storage", label: "데이터 관리" },
-    { id: "about" as const, icon: "info", label: "앱 정보" },
+    { id: "church" as const, icon: "church", label: t("settings.tab.church") },
+    { id: "system" as const, icon: "tune", label: t("settings.tab.system") },
+    { id: "accounts" as const, icon: "category", label: t("settings.tab.accounts") },
+    { id: "admin" as const, icon: "admin_panel_settings", label: t("settings.tab.admin") },
+    { id: "about" as const, icon: "info", label: t("settings.tab.about") },
   ];
 
   return (
@@ -415,10 +356,10 @@ function Settings() {
       <div className="settings-header">
         <h1 className="settings-header__title">
           <span className="material-symbols-outlined">settings</span>
-          시스템 설정
+          {t("settings.header.title")}
         </h1>
         <p className="settings-header__description">
-          교회 정보, 시스템 환경 및 데이터를 관리할 수 있습니다.
+          {t("settings.header.description")}
         </p>
       </div>
 
@@ -453,15 +394,39 @@ function Settings() {
             <div className="settings-section">
               <h2 className="settings-section__title">
                 <span className="material-symbols-outlined">church</span>
-                교회 기본 정보
+                {t("settings.church.title")}
               </h2>
-              <p className="settings-section__description">
-                교회의 기본 정보를 입력해주세요. 이 정보는 각종 문서 및 보고서에 사용됩니다.
-              </p>
+              <p className="settings-section__description" dangerouslySetInnerHTML={{ __html: t("settings.church.description") }} />
+
+              {/* 잠금 안내 배너 */}
+              <div style={{
+                background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px",
+                padding: "0.875rem 1rem", marginBottom: "1.25rem",
+                display: "flex", gap: "0.5rem", alignItems: "flex-start",
+              }}>
+                <span className="material-symbols-outlined" style={{ color: "#b45309", fontSize: "1.125rem", flexShrink: 0 }}>lock</span>
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "#78350f", lineHeight: 1.55 }}>
+                  {t("settings.church.lockBanner")}
+                </p>
+              </div>
+
+              {changeRequestSuccess && (
+                <div style={{
+                  background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "10px",
+                  padding: "0.875rem 1rem", marginBottom: "1.25rem",
+                  display: "flex", gap: "0.5rem", alignItems: "center",
+                }}>
+                  <span className="material-symbols-outlined" style={{ color: "#059669", fontSize: "1.125rem" }}>check_circle</span>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "#065f46" }}>
+                    {t("settings.church.requestSuccess")}
+                  </p>
+                </div>
+              )}
 
               <div className="settings-form">
+                {/* 로고는 각종 문서/포탈용이라 등록 정보와 별개로 관리자가 직접 업로드 가능하게 유지 */}
                 <div className="settings-form__group settings-form__group--full">
-                  <label className="settings-form__label">교회 로고</label>
+                  <label className="settings-form__label">{t("settings.church.logoLabel")}</label>
                   <div className="logo-upload-container" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <div className="logo-preview" style={{
                       width: '80px',
@@ -474,8 +439,8 @@ function Settings() {
                       background: 'var(--bg-secondary)',
                       overflow: 'hidden'
                     }}>
-                      {settings.church.logo ? (
-                        <img src={settings.church.logo} alt="Church Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      {church?.logo ? (
+                        <img src={church.logo} alt="Church Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                       ) : (
                         <span className="material-symbols-outlined" style={{ fontSize: '2rem', color: 'var(--text-tertiary)' }}>church</span>
                       )}
@@ -487,18 +452,26 @@ function Settings() {
                         gap: '0.5rem',
                         padding: '0.4rem 0.8rem',
                         borderRadius: '0.375rem',
-                        cursor: 'pointer',
+                        cursor: uploadingLogo ? 'not-allowed' : 'pointer',
                         border: '1px solid var(--border)',
-                        background: 'var(--bg-primary)'
+                        background: 'var(--bg-primary)',
+                        opacity: uploadingLogo ? 0.6 : 1,
                       }}>
                         <span className="material-symbols-outlined" style={{ fontSize: '1.2rem' }}>upload</span>
-                        로고 파일 선택
-                        <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: "none" }} />
+                        {uploadingLogo ? t("settings.church.logoUploading") : church?.logo ? t("settings.church.logoReplace") : t("settings.church.logoPick")}
+                        <input
+                          ref={logoInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          disabled={uploadingLogo || !churchId}
+                          style={{ display: "none" }}
+                        />
                       </label>
-                      {settings.church.logo && (
+                      {church?.logo && (
                         <button
                           className="btn-danger"
-                          onClick={() => handleChurchChange("logo", "")}
+                          onClick={handleLogoRemove}
                           style={{
                             marginLeft: "0.5rem",
                             padding: "0.4rem 0.8rem",
@@ -509,94 +482,59 @@ function Settings() {
                             cursor: 'pointer'
                           }}
                         >
-                          삭제
+                          {t("settings.church.logoDelete")}
                         </button>
                       )}
                       <p className="settings-form__hint" style={{ marginTop: "0.5rem", fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                        앱 상단 및 각종 보고서에 표시됩니다. (투명 배경 PNG 권장)
+                        {t("settings.church.logoHint")}
                       </p>
                     </div>
                   </div>
                 </div>
 
+                {/* 잠긴 등록 정보 (읽기 전용) */}
                 <div className="settings-form__row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', gridColumn: 'span 2' }}>
-                  <div className="settings-form__group">
-                    <label className="settings-form__label">교회 이름</label>
-                    <input
-                      type="text"
-                      className="settings-form__input"
-                      placeholder="예: 은혜의교회"
-                      value={settings.church.churchName}
-                      onChange={(e) => handleChurchChange("churchName", e.target.value)}
-                    />
-                  </div>
-                  <div className="settings-form__group">
-                    <label className="settings-form__label">담임목사 성함</label>
-                    <div className="input-group">
-                      <MemberSelect
-                        value={settings.church.pastorName}
-                        onChange={(val: string) => handleChurchChange("pastorName", val)}
-                        members={members}
-                        roleFilter="목사"
-                        placeholder="예: 김은혜 (검색하여 선택)"
-                      />
-                    </div>
-                  </div>
+                  <LockedField label={t("churchInfoField.name")} value={church?.name} notRegisteredLabel={t("settings.locked.notRegistered")} />
+                  <LockedField label={t("churchInfoField.pastorName")} value={church?.pastorName} notRegisteredLabel={t("settings.locked.notRegistered")} />
                 </div>
-
                 <div className="settings-form__row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', gridColumn: 'span 2' }}>
-                  <div className="settings-form__group">
-                    <label className="settings-form__label">이메일</label>
-                    <input
-                      type="email"
-                      className="settings-form__input"
-                      placeholder="예: info@church.com"
-                      value={settings.church.email}
-                      onChange={(e) => handleChurchChange("email", e.target.value)}
-                    />
-                  </div>
-                  <div className="settings-form__group">
-                    <label className="settings-form__label">설립연도</label>
-                    <input
-                      type="text"
-                      className="settings-form__input"
-                      placeholder="예: 1990"
-                      value={settings.church.foundedYear}
-                      onChange={(e) => handleChurchChange("foundedYear", e.target.value)}
-                    />
-                  </div>
+                  <LockedField label={t("churchInfoField.email")} value={church?.email} notRegisteredLabel={t("settings.locked.notRegistered")} />
+                  <LockedField label={t("churchInfoField.phone")} value={church?.phone} notRegisteredLabel={t("settings.locked.notRegistered")} />
                 </div>
-
                 <div className="settings-form__group settings-form__group--full">
-                  <label className="settings-form__label">연락처</label>
-                  <input
-                    type="tel"
-                    className="settings-form__input"
-                    placeholder="예: 02-1234-5678"
-                    value={settings.church.phone}
-                    onChange={(e) => handleChurchChange("phone", e.target.value)}
-                  />
+                  <LockedField label={t("churchInfoField.address")} value={church?.address} notRegisteredLabel={t("settings.locked.notRegistered")} fullWidth />
                 </div>
-
-                <div className="settings-form__group settings-form__group--full">
-                  <label className="settings-form__label">교회 주소</label>
-                  <input
-                    type="text"
-                    className="settings-form__input"
-                    placeholder="예: 서울시 강남구 역삼동 123-45"
-                    value={settings.church.address}
-                    onChange={(e) => handleChurchChange("address", e.target.value)}
-                  />
-                </div>
-
-
               </div>
 
-              <div className="settings-actions">
-                <button className="settings-btn settings-btn--primary" onClick={handleSave} disabled={isSaving}>
-                  <span className="material-symbols-outlined">save</span>
-                  {isSaving ? "저장 중..." : "저장하기"}
+              <div className="settings-actions" style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  className="settings-btn settings-btn--primary"
+                  onClick={() => { setChangeRequestSuccess(false); setShowChangeRequestModal(true); }}
+                  disabled={!church}
+                >
+                  <span className="material-symbols-outlined">edit_note</span>
+                  {t("settings.church.requestEdit")}
                 </button>
+              </div>
+
+              {/* 요청 내역 */}
+              <div style={{ marginTop: "2rem", paddingTop: "1.5rem", borderTop: "1px solid #e2e8f0" }}>
+                <h3 style={{ margin: "0 0 0.5rem", fontSize: "1rem", fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "0.375rem" }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: "1.1rem", color: "#64748b" }}>history</span>
+                  {t("settings.church.historyTitle")}
+                </h3>
+                <p style={{ margin: "0 0 1rem", fontSize: "0.82rem", color: "#64748b" }}>
+                  {t("settings.church.historyDescription")}
+                </p>
+                {changeRequests.length === 0 ? (
+                  <div style={{ textAlign: "center", color: "#94a3b8", padding: "1.5rem", fontSize: "0.88rem", border: "1px dashed #e2e8f0", borderRadius: "10px" }}>
+                    {t("settings.church.historyEmpty")}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                    {changeRequests.slice(0, 10).map((r) => <RequestRow key={r.id} r={r} />)}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -606,26 +544,30 @@ function Settings() {
             <div className="settings-section">
               <h2 className="settings-section__title">
                 <span className="material-symbols-outlined">tune</span>
-                시스템 환경설정
+                {t("settings.system.title")}
               </h2>
               <p className="settings-section__description">
-                앱의 기본 동작 방식을 설정합니다.
+                {t("settings.system.description")}
               </p>
 
               <div className="settings-form">
                 <div className="settings-form__group">
-                  <label className="settings-form__label">언어</label>
+                  <label className="settings-form__label">{t("settings.language")}</label>
                   <select
                     className="settings-form__select"
-                    value={settings.language}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, language: e.target.value as SettingsData["language"] }))}
+                    value={locale}
+                    onChange={(e) => setLocale(e.target.value as Locale)}
                   >
-                    <option value="ko">한국어</option>
+                    <option value="ko">{localeFlags.ko} {localeLabels.ko}</option>
+                    <option value="en">{localeFlags.en} {localeLabels.en}</option>
                   </select>
+                  <p className="settings-form__hint">
+                    {t("settings.languageHint")}
+                  </p>
                 </div>
 
                 <div className="settings-form__group">
-                  <label className="settings-form__label">통화</label>
+                  <label className="settings-form__label">{t("settings.system.currency")}</label>
                   <select
                     className="settings-form__select"
                     value={settings.currency}
@@ -642,49 +584,16 @@ function Settings() {
                     ))}
                   </select>
                   <p className="settings-form__hint">
-                    금액 표시에 사용되는 통화를 선택합니다. 변경 시 모든 금액 표시에 즉시 적용됩니다.
+                    {t("settings.system.currencyHint")}
                   </p>
                 </div>
 
-                <div className="settings-form__group settings-form__group--full">
-                  <label className="settings-form__label">자동 백업</label>
-                  <div className="settings-toggle">
-                    <label className="settings-toggle__switch">
-                      <input
-                        type="checkbox"
-                        checked={false}
-                        disabled
-                        onChange={() => { }}
-                      />
-                      <span className="settings-toggle__slider"></span>
-                    </label>
-                    <span className="settings-toggle__text">
-                      {settings.autoBackup ? "활성화됨 (준비중)" : "비활성화됨 (파일 관리 사용)"}
-                    </span>
-                  </div>
-                  <p className="settings-form__hint">자동 백업 기능은 현재 지원되지 않습니다. 데이터 관리 탭에서 수동 백업을 이용해주세요.</p>
-                </div>
-
-                {settings.autoBackup && (
-                  <div className="settings-form__group">
-                    <label className="settings-form__label">백업 주기</label>
-                    <select
-                      className="settings-form__select"
-                      value={settings.backupInterval}
-                      onChange={(e) => setSettings((prev) => ({ ...prev, backupInterval: e.target.value as SettingsData["backupInterval"] }))}
-                    >
-                      <option value="daily">매일</option>
-                      <option value="weekly">매주</option>
-                      <option value="monthly">매월</option>
-                    </select>
-                  </div>
-                )}
               </div>
 
               <div className="settings-actions">
                 <button className="settings-btn settings-btn--primary" onClick={handleSave} disabled={isSaving}>
                   <span className="material-symbols-outlined">save</span>
-                  {isSaving ? "저장 중..." : "저장하기"}
+                  {isSaving ? t("common.saving") : t("settings.system.save")}
                 </button>
               </div>
             </div>
@@ -693,13 +602,6 @@ function Settings() {
           {/* Admin Management Tab */}
           {activeTab === "admin" && (
             <div className="settings-section">
-              <h2 className="settings-section__title">
-                <span className="material-symbols-outlined">admin_panel_settings</span>
-                관리자 관리
-              </h2>
-              <p className="settings-section__description">
-                시스템에 로그인할 수 있는 관리자를 등록하고 권한을 설정합니다.
-              </p>
               <AdminManagement currentUser={currentUser} />
             </div>
           )}
@@ -711,15 +613,15 @@ function Settings() {
                 <div>
                   <h2 className="settings-section__title">
                     <span className="material-symbols-outlined">category</span>
-                    계정 관리
+                    {t("settings.accounts.title")}
                   </h2>
                   <p className="settings-section__description">
-                    수입 및 지출 항목으로 사용할 계정을 관리합니다.
+                    {t("settings.accounts.description")}
                   </p>
                 </div>
                 <button className="settings-btn settings-btn--primary" onClick={openAddAccountModal}>
                   <span className="material-symbols-outlined">add</span>
-                  계정 추가
+                  {t("settings.accounts.add")}
                 </button>
               </div>
 
@@ -727,10 +629,10 @@ function Settings() {
                 <table className="settings-table">
                   <thead>
                     <tr>
-                      <th>구분</th>
-                      <th>이름</th>
-                      <th>설명</th>
-                      <th style={{ width: "100px" }}>관리</th>
+                      <th>{t("settings.accounts.colType")}</th>
+                      <th>{t("settings.accounts.colName")}</th>
+                      <th>{t("settings.accounts.colDescription")}</th>
+                      <th style={{ width: "100px" }}>{t("settings.accounts.colActions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -738,7 +640,7 @@ function Settings() {
                       <tr key={account.id}>
                         <td>
                           <span className={`badge badge--${account.type} `}>
-                            {account.type === "income" ? "수입" : account.type === "expense" ? "지출" : "자산"}
+                            {account.type === "income" ? t("settings.accounts.typeIncome") : account.type === "expense" ? t("settings.accounts.typeExpense") : t("settings.accounts.typeAsset")}
                           </span>
                         </td>
                         <td>
@@ -762,88 +664,11 @@ function Settings() {
                     ))}
                     {accounts.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="text-center py-4">등록된 계정이 없습니다.</td>
+                        <td colSpan={4} className="table-empty">{t("settings.accounts.empty")}</td>
                       </tr>
                     )}
                   </tbody>
                 </table>
-              </div>
-            </div>
-          )}
-
-          {/* Data Management Tab */}
-          {activeTab === "data" && (
-            <div className="settings-section">
-              <h2 className="settings-section__title">
-                <span className="material-symbols-outlined">storage</span>
-                데이터 관리
-              </h2>
-              <p className="settings-section__description">
-                데이터 백업, 복원 및 초기화를 수행할 수 있습니다.
-              </p>
-
-              <div className="settings-data-cards">
-                {/* Backup Card */}
-                <div className="settings-data-card">
-                  <div className="settings-data-card__icon settings-data-card__icon--blue">
-                    <span className="material-symbols-outlined">cloud_download</span>
-                  </div>
-                  <div className="settings-data-card__content">
-                    <h3 className="settings-data-card__title">데이터 백업</h3>
-                    <p className="settings-data-card__description">
-                      현재 저장된 모든 데이터를 JSON 파일로 다운로드합니다.
-                    </p>
-                    <button className="settings-btn settings-btn--outline" onClick={handleBackup}>
-                      <span className="material-symbols-outlined">download</span>
-                      백업 파일 다운로드
-                    </button>
-                  </div>
-                </div>
-
-                {/* Restore Card */}
-                <div className="settings-data-card">
-                  <div className="settings-data-card__icon settings-data-card__icon--green">
-                    <span className="material-symbols-outlined">cloud_upload</span>
-                  </div>
-                  <div className="settings-data-card__content">
-                    <h3 className="settings-data-card__title">데이터 복원</h3>
-                    <p className="settings-data-card__description">
-                      이전에 백업한 JSON 파일에서 데이터를 복원합니다.
-                    </p>
-                    <label className="settings-btn settings-btn--outline">
-                      <span className="material-symbols-outlined">upload</span>
-                      백업 파일 선택
-                      <input
-                        type="file"
-                        accept=".json"
-                        onChange={handleRestore}
-                        style={{ display: "none" }}
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                {/* Reset Card */}
-                <div className="settings-data-card settings-data-card--danger">
-                  <div className="settings-data-card__icon settings-data-card__icon--red">
-                    <span className="material-symbols-outlined">delete_forever</span>
-                  </div>
-                  <div className="settings-data-card__content">
-                    <h3 className="settings-data-card__title">시스템 초기화</h3>
-                    <p className="settings-data-card__description">
-                      모든 데이터를 삭제하고 시스템을 초기 상태로 되돌립니다.
-                      <br />
-                      <strong style={{ color: "var(--danger)" }}>이 작업은 되돌릴 수 없습니다!</strong>
-                    </p>
-                    <button
-                      className="settings-btn settings-btn--danger"
-                      onClick={() => setShowResetConfirm(true)}
-                    >
-                      <span className="material-symbols-outlined">warning</span>
-                      시스템 초기화
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -853,7 +678,7 @@ function Settings() {
             <div className="settings-section">
               <h2 className="settings-section__title">
                 <span className="material-symbols-outlined">info</span>
-                앱 정보
+                {t("settings.about.title")}
               </h2>
 
               <div className="settings-about">
@@ -861,71 +686,18 @@ function Settings() {
                   <span className="material-symbols-outlined">church</span>
                 </div>
                 <h3 className="settings-about__name">Church ERP</h3>
-                <p className="settings-about__version">버전 0.2.1</p>
-                <p className="settings-about__description">
-                  교회 관리를 위한 통합 ERP 시스템입니다.
-                  <br />
-                  성도 관리, 회계/헌금 관리, 사역/교육 자료 관리 등
-                  <br />
-                  교회 운영에 필요한 모든 기능을 제공합니다.
-                </p>
 
                 <div className="settings-about__info">
                   <div className="settings-about__info-item">
-                    <span className="settings-about__info-label">개발</span>
-                    <span className="settings-about__info-value">Church ERP Team</span>
-                  </div>
-                  <div className="settings-about__info-item">
-                    <span className="settings-about__info-label">라이선스</span>
+                    <span className="settings-about__info-label">{t("settings.about.license")}</span>
                     <span className="settings-about__info-value">MIT License</span>
                   </div>
-                  <div className="settings-about__info-item">
-                    <span className="settings-about__info-label">빌드</span>
-                    <span className="settings-about__info-value">Tauri + React + TypeScript</span>
-                  </div>
-                  <div className="settings-about__info-item">
-                    <span className="settings-about__info-label">데이터 저장</span>
-                    <span className="settings-about__info-value">파일 관리</span>
-                  </div>
                 </div>
-
-                <p className="settings-about__copyright">
-                  © 2024 Church ERP System. All rights reserved.
-                </p>
               </div>
             </div>
           )}
         </div>
       </div>
-
-      {/* Reset Confirmation Modal */}
-      {showResetConfirm && (
-        <div className="settings-modal-overlay" onClick={() => setShowResetConfirm(false)}>
-          <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="settings-modal__icon">
-              <span className="material-symbols-outlined">warning</span>
-            </div>
-            <h3 className="settings-modal__title">시스템 초기화</h3>
-            <p className="settings-modal__description">
-              정말로 모든 데이터를 삭제하시겠습니까?
-              <br />
-              이 작업은 되돌릴 수 없으며, 모든 성도 정보, 헌금 기록, 자료 등이 삭제됩니다.
-            </p>
-            <div className="settings-modal__actions">
-              <button
-                className="settings-btn settings-btn--outline"
-                onClick={() => setShowResetConfirm(false)}
-              >
-                취소
-              </button>
-              <button className="settings-btn settings-btn--danger" onClick={handleReset}>
-                <span className="material-symbols-outlined">delete_forever</span>
-                초기화 실행
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Account Modal */}
       {showAccountModal && (
@@ -933,7 +705,7 @@ function Settings() {
           <div className="settings-modal settings-modal--lg" onClick={(e) => e.stopPropagation()}>
             <div className="settings-modal__header">
               <h3 className="settings-modal__title">
-                {isEditingAccount ? "계정 수정" : "계정 추가"}
+                {isEditingAccount ? t("settings.account.editTitle") : t("settings.account.addTitle")}
               </h3>
               <button className="icon-btn" onClick={() => setShowAccountModal(false)}>
                 <span className="material-symbols-outlined">close</span>
@@ -944,7 +716,7 @@ function Settings() {
               <div className="settings-form">
                 {/* Type Selection */}
                 <div className="settings-form__group">
-                  <label className="settings-form__label">계정 구분</label>
+                  <label className="settings-form__label">{t("settings.account.typeLabel")}</label>
                   <div className="account-type-selector">
                     <label className={`type - option ${currentAccount.type === "income" ? "active income" : ""} `}>
                       <input
@@ -953,7 +725,7 @@ function Settings() {
                         checked={currentAccount.type === "income"}
                         onChange={() => setCurrentAccount(prev => ({ ...prev, type: "income" }))}
                       />
-                      <span>수입</span>
+                      <span>{t("settings.accounts.typeIncome")}</span>
                     </label>
                     <label className={`type - option ${currentAccount.type === "expense" ? "active expense" : ""} `}>
                       <input
@@ -962,7 +734,7 @@ function Settings() {
                         checked={currentAccount.type === "expense"}
                         onChange={() => setCurrentAccount(prev => ({ ...prev, type: "expense" }))}
                       />
-                      <span>지출</span>
+                      <span>{t("settings.accounts.typeExpense")}</span>
                     </label>
                     <label className={`type - option ${currentAccount.type === "asset" ? "active asset" : ""} `}>
                       <input
@@ -971,7 +743,7 @@ function Settings() {
                         checked={currentAccount.type === "asset"}
                         onChange={() => setCurrentAccount(prev => ({ ...prev, type: "asset" }))}
                       />
-                      <span>자산</span>
+                      <span>{t("settings.accounts.typeAsset")}</span>
                     </label>
                   </div>
                 </div>
@@ -979,11 +751,11 @@ function Settings() {
 
                 {/* Name */}
                 <div className="settings-form__group">
-                  <label className="settings-form__label">계정 이름 <span className="required">*</span></label>
+                  <label className="settings-form__label">{t("settings.account.nameLabel")} <span className="required">*</span></label>
                   <input
                     type="text"
                     className="settings-form__input"
-                    placeholder="예: 십일조헌금"
+                    placeholder={t("settings.account.namePlaceholder")}
                     value={currentAccount.name || ""}
                     onChange={(e) => setCurrentAccount(prev => ({ ...prev, name: e.target.value }))}
                   />
@@ -991,21 +763,21 @@ function Settings() {
 
                 {/* SubName & Description */}
                 <div className="settings-form__group">
-                  <label className="settings-form__label">보조 이름 (선택)</label>
+                  <label className="settings-form__label">{t("settings.account.subNameLabel")}</label>
                   <input
                     type="text"
                     className="settings-form__input"
-                    placeholder="예: 1부예배"
+                    placeholder={t("settings.account.subNamePlaceholder")}
                     value={currentAccount.subName || ""}
                     onChange={(e) => setCurrentAccount(prev => ({ ...prev, subName: e.target.value }))}
                   />
                 </div>
                 <div className="settings-form__group">
-                  <label className="settings-form__label">설명 (선택)</label>
+                  <label className="settings-form__label">{t("settings.account.descriptionLabel")}</label>
                   <input
                     type="text"
                     className="settings-form__input"
-                    placeholder="계정에 대한 설명을 입력하세요"
+                    placeholder={t("settings.account.descriptionPlaceholder")}
                     value={currentAccount.description || ""}
                     onChange={(e) => setCurrentAccount(prev => ({ ...prev, description: e.target.value }))}
                   />
@@ -1014,10 +786,101 @@ function Settings() {
             </div>
 
             <div className="settings-modal__footer">
-              <button className="settings-btn settings-btn--outline" onClick={() => setShowAccountModal(false)}>취소</button>
-              <button className="settings-btn settings-btn--primary" onClick={handleSaveAccount}>저장</button>
+              <button className="settings-btn settings-btn--outline" onClick={() => setShowAccountModal(false)}>{t("common.cancel")}</button>
+              <button className="settings-btn settings-btn--primary" onClick={handleSaveAccount}>{t("common.save")}</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 교회 정보 수정 요청 모달 */}
+      {showChangeRequestModal && church && currentUser && (
+        <ChurchInfoChangeRequestModal
+          church={church}
+          requester={{ uid: currentUser.id, email: currentUser.email, displayName: currentUser.displayName }}
+          onClose={() => setShowChangeRequestModal(false)}
+          onSubmitted={() => {
+            setShowChangeRequestModal(false);
+            setChangeRequestSuccess(true);
+            setTimeout(() => setChangeRequestSuccess(false), 6000);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function LockedField({ label, value, fullWidth, notRegisteredLabel }: { label: string; value?: string; fullWidth?: boolean; notRegisteredLabel: string }) {
+  return (
+    <div className="settings-form__group" style={fullWidth ? { gridColumn: "span 2" } : undefined}>
+      <div
+        style={{
+          fontSize: "0.78rem",
+          fontWeight: 600,
+          color: "#64748b",
+          marginBottom: "0.25rem",
+          letterSpacing: "0.01em",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          padding: "0.25rem 0",
+          color: value ? "#0f172a" : "#94a3b8",
+          fontSize: "0.95rem",
+          fontWeight: value ? 500 : 400,
+          minHeight: "1.5rem",
+          lineHeight: 1.5,
+          fontStyle: value ? "normal" : "italic",
+        }}
+      >
+        {value || notRegisteredLabel}
+      </div>
+    </div>
+  );
+}
+
+function RequestRow({ r }: { r: ChurchChangeRequest }) {
+  const { t, locale } = useLocale();
+  const badge = (() => {
+    if (r.status === "pending") return { text: t("settings.request.statusPending"), bg: "#fef3c7", color: "#b45309", border: "#fde68a" };
+    if (r.status === "approved") return { text: t("settings.request.statusApproved"), bg: "#dcfce7", color: "#15803d", border: "#bbf7d0" };
+    return { text: t("settings.request.statusRejected"), bg: "#fee2e2", color: "#b91c1c", border: "#fecaca" };
+  })();
+  const when = new Date(r.createdAt).toLocaleString(locale === "ko" ? "ko-KR" : "en-US");
+  const fieldLabel = (field: ChurchInfoField) => t(`churchInfoField.${field}` as const);
+  return (
+    <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "0.75rem 0.875rem", background: "white" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+        <span
+          style={{
+            fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: "999px",
+            background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`,
+          }}
+        >
+          {badge.text}
+        </span>
+        <span style={{ fontSize: "0.75rem", color: "#64748b" }}>{t("settings.request.requestedAt", { when })}</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.82rem", color: "#334155" }}>
+        {r.items.map((item, i) => (
+          <div key={i}>
+            <strong>{fieldLabel(item.field)}</strong>:{" "}
+            <span style={{ color: "#94a3b8", textDecoration: "line-through" }}>{item.currentValue || t("settings.request.noValue")}</span>
+            {" → "}
+            <span style={{ color: "#16649c", fontWeight: 600 }}>{item.requestedValue}</span>
+          </div>
+        ))}
+      </div>
+      {r.reason && (
+        <div style={{ marginTop: "0.5rem", padding: "0.5rem 0.625rem", background: "#f8fafc", borderRadius: "6px", fontSize: "0.78rem", color: "#475569" }}>
+          <strong>{t("settings.request.reason")}:</strong> {r.reason}
+        </div>
+      )}
+      {r.resolverNote && (
+        <div style={{ marginTop: "0.375rem", padding: "0.5rem 0.625rem", background: r.status === "approved" ? "#f0fdf4" : "#fef2f2", borderRadius: "6px", fontSize: "0.78rem", color: r.status === "approved" ? "#166534" : "#991b1b" }}>
+          <strong>{t("settings.request.resolverNote")}:</strong> {r.resolverNote}
         </div>
       )}
     </div>

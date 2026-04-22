@@ -1,5 +1,6 @@
 import { Transaction, AccountBreakdown, LedgerRow, DetailViewType } from "../../types/finance";
 import DonutChart from "../charts/DonutChart";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface StatCardProps {
   type: "income" | "expense" | "net";
@@ -53,7 +54,6 @@ function StatCard({ type, label, value, isActive, netValue, onClick }: StatCardP
 }
 
 interface LedgerViewProps {
-  // Data
   ledgerData: LedgerRow[];
   monthlyTransactions: Transaction[];
   monthlyIncomeTransactions: Transaction[];
@@ -65,8 +65,6 @@ interface LedgerViewProps {
   selectedYear: number;
   selectedMonth: number;
   detailView: DetailViewType;
-
-  // Functions
   formatCurrency: (amount: number, useLarge?: boolean) => string;
   setDetailView: (view: DetailViewType) => void;
   onAddAccount: () => void;
@@ -92,6 +90,10 @@ function LedgerView({
   onEditAccount,
   onDeleteAccount,
 }: LedgerViewProps) {
+  const { t, locale } = useLocale();
+  const monthName = (month: number) =>
+    locale === "ko" ? `${month}월` : new Date(2000, month - 1, 1).toLocaleString("en-US", { month: "long" });
+
   const getDotClass = (type: string): string => {
     switch (type) {
       case "asset":
@@ -109,48 +111,43 @@ function LedgerView({
     <div className="overview-content overview-content--wide">
       {monthlyTransactions.length > 0 ? (
         <>
-          {/* Integrated Header: Summary + Net Profit + Progress */}
           <div className="monthly-summary-header monthly-summary-header--compact">
-            {/* Top Row: Income / Expense */}
             <div className="monthly-summary-top">
               <div className="summary-item-compact income" onClick={() => setDetailView("income")}>
-                <span className="label">수입</span>
+                <span className="label">{t("finance.ledger.income")}</span>
                 <span className="value">{formatCurrency(totals.income, true)}</span>
               </div>
               <div className="vertical-divider"></div>
               <div className="summary-item-compact expense" onClick={() => setDetailView("expense")}>
-                <span className="label">지출</span>
+                <span className="label">{t("finance.ledger.expense")}</span>
                 <span className="value">{formatCurrency(totals.expense, true)}</span>
               </div>
             </div>
 
-            {/* Middle Row: Net Profit */}
             <div className={`summary-item-highlight result ${totals.net >= 0 ? "positive" : "negative"}`}>
               <div className="net-profit-label">
                 <span className="material-symbols-outlined">
                   {totals.net >= 0 ? "savings" : "trending_down"}
                 </span>
-                <span>순이익</span>
+                <span>{t("finance.ledger.netProfit")}</span>
               </div>
               <span className="net-profit-value">{formatCurrency(totals.net, true)}</span>
             </div>
 
-            {/* Bottom Row: Progress Bar Integrated */}
             <div className="header-progress-bar">
               <div
                 className={`progress-fill ${totals.income > 0 ? (totals.expense / totals.income >= 1 ? "danger" : totals.expense / totals.income >= 0.8 ? "warning" : "success") : ""}`}
                 style={{ width: totals.income > 0 ? `${Math.min((totals.expense / totals.income) * 100, 100)}%` : "0%" }}
               ></div>
               <span className="progress-text">
-                지출 비율: {totals.income > 0 ? ((totals.expense / totals.income) * 100).toFixed(0) : 0}%
+                {t("finance.ledger.expenseRatio", { percent: totals.income > 0 ? ((totals.expense / totals.income) * 100).toFixed(0) : 0 })}
               </span>
             </div>
           </div>
 
-          {/* Charts Area - Expanded */}
           <div className="overview-charts overview-charts--expanded">
             <div className="mini-chart-section" onClick={() => setDetailView("income")}>
-              <h4>수입 구성</h4>
+              <h4>{t("finance.ledger.incomeBreakdown")}</h4>
               <DonutChart
                 data={incomeByAccount}
                 size="medium"
@@ -167,7 +164,7 @@ function LedgerView({
             </div>
 
             <div className="mini-chart-section" onClick={() => setDetailView("expense")}>
-              <h4>지출 구성</h4>
+              <h4>{t("finance.ledger.expenseBreakdown")}</h4>
               <DonutChart
                 data={expenseByAccount}
                 size="medium"
@@ -187,8 +184,8 @@ function LedgerView({
       ) : (
         <div className="empty-state">
           <span className="material-symbols-outlined">account_balance_wallet</span>
-          <p>{selectedYear}년 {selectedMonth}월 거래 데이터가 없습니다.</p>
-          <p className="sub">수입/지출 탭에서 새 거래를 추가해주세요.</p>
+          <p>{t("finance.ledger.noMonthData", { year: selectedYear, month: monthName(selectedMonth) })}</p>
+          <p className="sub">{t("finance.ledger.noMonthDataHint")}</p>
         </div>
       )}
     </div>
@@ -203,7 +200,7 @@ function LedgerView({
               data={incomeByAccount}
               size="large"
               centerValue={formatCurrency(totals.income)}
-              centerLabel="총 수입"
+              centerLabel={t("finance.ledger.totalIncome")}
             />
             <div className="chart-legend">
               {incomeByAccount.map((item, idx) => (
@@ -223,16 +220,16 @@ function LedgerView({
             </div>
           </div>
           <div className="detail-table">
-            <h4>최근 수입 내역</h4>
+            <h4>{t("finance.ledger.recentIncome")}</h4>
             <div className="detail-table-list">
-              {monthlyIncomeTransactions.slice(0, 5).map((t) => (
-                <div key={t.id} className="detail-table-row">
+              {monthlyIncomeTransactions.slice(0, 5).map((tx) => (
+                <div key={tx.id} className="detail-table-row">
                   <div className="row-left">
-                    <span className="date">{t.date.slice(5)}</span>
-                    <span className="desc">{t.description}</span>
+                    <span className="date">{tx.date.slice(5)}</span>
+                    <span className="desc">{tx.description}</span>
                   </div>
                   <span className="amount income">
-                    +{formatCurrency(t.amount)}
+                    +{formatCurrency(tx.amount)}
                   </span>
                 </div>
               ))}
@@ -242,7 +239,7 @@ function LedgerView({
       ) : (
         <div className="empty-state">
           <span className="material-symbols-outlined">trending_up</span>
-          <p>{selectedMonth}월 수입 거래가 없습니다.</p>
+          <p>{t("finance.ledger.noMonthIncome", { month: monthName(selectedMonth) })}</p>
         </div>
       )}
     </div>
@@ -257,7 +254,7 @@ function LedgerView({
               data={expenseByAccount}
               size="large"
               centerValue={formatCurrency(totals.expense)}
-              centerLabel="총 지출"
+              centerLabel={t("finance.ledger.totalExpense")}
             />
             <div className="chart-legend">
               {expenseByAccount.map((item, idx) => (
@@ -277,16 +274,16 @@ function LedgerView({
             </div>
           </div>
           <div className="detail-table">
-            <h4>최근 지출 내역</h4>
+            <h4>{t("finance.ledger.recentExpense")}</h4>
             <div className="detail-table-list">
-              {monthlyExpenseTransactions.slice(0, 5).map((t) => (
-                <div key={t.id} className="detail-table-row">
+              {monthlyExpenseTransactions.slice(0, 5).map((tx) => (
+                <div key={tx.id} className="detail-table-row">
                   <div className="row-left">
-                    <span className="date">{t.date.slice(5)}</span>
-                    <span className="desc">{t.description}</span>
+                    <span className="date">{tx.date.slice(5)}</span>
+                    <span className="desc">{tx.description}</span>
                   </div>
                   <span className="amount expense">
-                    {formatCurrency(t.amount)}
+                    {formatCurrency(tx.amount)}
                   </span>
                 </div>
               ))}
@@ -296,7 +293,7 @@ function LedgerView({
       ) : (
         <div className="empty-state">
           <span className="material-symbols-outlined">trending_down</span>
-          <p>{selectedMonth}월 지출 거래가 없습니다.</p>
+          <p>{t("finance.ledger.noMonthExpense", { month: monthName(selectedMonth) })}</p>
         </div>
       )}
     </div>
@@ -310,7 +307,7 @@ function LedgerView({
             <span className="material-symbols-outlined">trending_up</span>
           </div>
           <div>
-            <span className="profit-card__label">총 수입</span>
+            <span className="profit-card__label">{t("finance.ledger.totalIncome")}</span>
             <span className="profit-card__value">{formatCurrency(totals.income)}</span>
           </div>
         </div>
@@ -319,7 +316,7 @@ function LedgerView({
             <span className="material-symbols-outlined">trending_down</span>
           </div>
           <div>
-            <span className="profit-card__label">총 지출</span>
+            <span className="profit-card__label">{t("finance.ledger.totalExpense")}</span>
             <span className="profit-card__value">{formatCurrency(totals.expense)}</span>
           </div>
         </div>
@@ -328,7 +325,7 @@ function LedgerView({
             <span className="material-symbols-outlined">account_balance_wallet</span>
           </div>
           <div>
-            <span className="profit-card__label">순이익</span>
+            <span className="profit-card__label">{t("finance.ledger.net")}</span>
             <span className="profit-card__value">{formatCurrency(totals.net)}</span>
           </div>
         </div>
@@ -336,7 +333,7 @@ function LedgerView({
 
       <div className="net-profit-details">
         <div className="top-list-section">
-          <h4>주요 수입원 (Top 3)</h4>
+          <h4>{t("finance.ledger.topIncome")}</h4>
           <div className="top-list">
             {ledgerData
               .filter(d => d.type === 'income' && d.income > 0)
@@ -352,13 +349,13 @@ function LedgerView({
                 </div>
               ))}
             {ledgerData.filter(d => d.type === 'income' && d.income > 0).length === 0 && (
-              <div className="top-item empty">데이터 없음</div>
+              <div className="top-item empty">{t("finance.ledger.noData")}</div>
             )}
           </div>
         </div>
 
         <div className="top-list-section">
-          <h4>주요 지출처 (Top 3)</h4>
+          <h4>{t("finance.ledger.topExpense")}</h4>
           <div className="top-list">
             {ledgerData
               .filter(d => d.type === 'expense' && d.expense > 0)
@@ -374,7 +371,7 @@ function LedgerView({
                 </div>
               ))}
             {ledgerData.filter(d => d.type === 'expense' && d.expense > 0).length === 0 && (
-              <div className="top-item empty">데이터 없음</div>
+              <div className="top-item empty">{t("finance.ledger.noData")}</div>
             )}
           </div>
         </div>
@@ -404,21 +401,21 @@ function LedgerView({
         <div className="finance-stats__left">
           <StatCard
             type="income"
-            label={`${selectedYear}년 총 수입`}
+            label={t("finance.ledger.yearlyIncome", { year: selectedYear })}
             value={formatCurrency(yearlyTotals.income, true)}
             isActive={detailView === "income"}
             onClick={() => setDetailView(detailView === "income" ? "overview" : "income")}
           />
           <StatCard
             type="expense"
-            label={`${selectedYear}년 총 지출`}
+            label={t("finance.ledger.yearlyExpense", { year: selectedYear })}
             value={formatCurrency(yearlyTotals.expense, true)}
             isActive={detailView === "expense"}
             onClick={() => setDetailView(detailView === "expense" ? "overview" : "expense")}
           />
           <StatCard
             type="net"
-            label={`${selectedYear}년 순이익`}
+            label={t("finance.ledger.yearlyNet", { year: selectedYear })}
             value={formatCurrency(yearlyTotals.net, true)}
             isActive={detailView === "net"}
             netValue={yearlyTotals.net}
@@ -428,20 +425,19 @@ function LedgerView({
 
         <div className="finance-stats__right">
           <div className="finance-chart-card">
-            {/* Header with back button when showing details */}
             <div className="finance-chart-card__header">
               <div>
                 <h3 className="finance-chart-card__title">
-                  {detailView === "overview" && `${selectedYear}년 ${selectedMonth}월 재정 현황`}
-                  {detailView === "income" && "수입 분석"}
-                  {detailView === "expense" && "지출 분석"}
-                  {detailView === "net" && "순이익 분석"}
+                  {detailView === "overview" && t("finance.ledger.monthlyStatusTitle", { year: selectedYear, month: monthName(selectedMonth) })}
+                  {detailView === "income" && t("finance.ledger.incomeAnalysis")}
+                  {detailView === "expense" && t("finance.ledger.expenseAnalysis")}
+                  {detailView === "net" && t("finance.ledger.netAnalysis")}
                 </h3>
                 <p className="finance-chart-card__subtitle">
-                  {detailView === "overview" && `총 ${monthlyTransactions.length}건의 거래`}
-                  {detailView === "income" && `${monthlyIncomeTransactions.length}건의 수입 · 계정별 비율`}
-                  {detailView === "expense" && `${monthlyExpenseTransactions.length}건의 지출 · 계정별 비율`}
-                  {detailView === "net" && "수입과 지출의 비교 분석"}
+                  {detailView === "overview" && t("finance.ledger.totalTransactions", { n: monthlyTransactions.length })}
+                  {detailView === "income" && t("finance.ledger.incomeCount", { n: monthlyIncomeTransactions.length })}
+                  {detailView === "expense" && t("finance.ledger.expenseCount", { n: monthlyExpenseTransactions.length })}
+                  {detailView === "net" && t("finance.ledger.netSubtitle")}
                 </p>
               </div>
               {detailView !== "overview" && (
@@ -450,7 +446,7 @@ function LedgerView({
                   onClick={() => setDetailView("overview")}
                 >
                   <span className="material-symbols-outlined">arrow_back</span>
-                  재정 현황
+                  {t("finance.ledger.backToOverview")}
                 </button>
               )}
             </div>
@@ -464,15 +460,15 @@ function LedgerView({
       <section className="ledger-section">
         <div className="ledger-header">
           <div>
-            <h2 className="ledger-header__title">총계정원장 (General Ledger)</h2>
+            <h2 className="ledger-header__title">{t("finance.ledger.ledgerTitle")}</h2>
             <p className="ledger-header__subtitle">
-              모든 계정의 잔액 및 상세 내역을 조회합니다.
+              {t("finance.ledger.ledgerSubtitle")}
             </p>
           </div>
           <div className="ledger-header__controls">
             <button className="ledger-export-btn" onClick={onAddAccount}>
               <span className="material-symbols-outlined">add</span>
-              새 계정 추가
+              {t("finance.ledger.addAccount")}
             </button>
           </div>
         </div>
@@ -482,12 +478,12 @@ function LedgerView({
             <table className="ledger-table">
               <thead>
                 <tr>
-                  <th style={{ minWidth: "12.5rem" }}>계정명</th>
-                  <th className="text-right bg-highlight">기초잔액</th>
-                  <th className="text-right text-income">수입(차변)</th>
-                  <th className="text-right text-expense">지출(대변)</th>
-                  <th className="text-right bg-highlight">기말잔액</th>
-                  <th className="text-center" style={{ width: "8rem" }}>작업</th>
+                  <th style={{ minWidth: "12.5rem" }}>{t("finance.ledger.colAccount")}</th>
+                  <th className="text-right bg-highlight">{t("finance.ledger.colOpening")}</th>
+                  <th className="text-right text-income">{t("finance.ledger.colIncome")}</th>
+                  <th className="text-right text-expense">{t("finance.ledger.colExpense")}</th>
+                  <th className="text-right bg-highlight">{t("finance.ledger.colBalance")}</th>
+                  <th className="text-center" style={{ width: "8rem" }}>{t("finance.ledger.colAction")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -515,14 +511,14 @@ function LedgerView({
                         <button
                           className="view-detail-btn"
                           onClick={() => onEditAccount(row)}
-                          title="수정"
+                          title={t("finance.table.edit")}
                         >
                           <span className="material-symbols-outlined">edit</span>
                         </button>
                         <button
                           className="view-detail-btn delete"
                           onClick={() => onDeleteAccount(row.id)}
-                          title="삭제"
+                          title={t("finance.table.delete")}
                         >
                           <span className="material-symbols-outlined">delete</span>
                         </button>
@@ -533,7 +529,7 @@ function LedgerView({
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={3} className="total-label">합계 (Totals):</td>
+                  <td colSpan={3} className="total-label">{t("finance.ledger.totals")}</td>
                   <td className="total-income">{formatCurrency(totals.income)}</td>
                   <td className="total-expense">{formatCurrency(totals.expense)}</td>
                   <td className="total-net">{formatCurrency(totals.net)}</td>
@@ -544,14 +540,14 @@ function LedgerView({
           ) : (
             <div className="empty-state">
               <span className="material-symbols-outlined">receipt_long</span>
-              <p>등록된 계정이 없습니다.</p>
-              <p className="sub">"새 계정 추가" 버튼을 클릭하여 계정을 등록해주세요.</p>
+              <p>{t("finance.ledger.emptyAccounts")}</p>
+              <p className="sub">{t("finance.ledger.emptyAccountsHint")}</p>
             </div>
           )}
         </div>
 
         <div className="ledger-footer">
-          <span className="ledger-footer__info">총 {ledgerData.length}개의 계정</span>
+          <span className="ledger-footer__info">{t("finance.ledger.accountCount", { n: ledgerData.length })}</span>
         </div>
       </section>
     </>

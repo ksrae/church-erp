@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { loadData, saveData } from "../utils/fileStorage";
 import { LayoutOutletContext } from "../components/Layout";
+import { useLocale } from "../i18n/LocaleContext";
 
 const MEMBERS_STORAGE_KEY = "church_erp_members";
 const VIEW_STATE_KEY = "church_erp_members_view_state";
@@ -33,6 +34,7 @@ interface OrgGroup {
 
 function Members() {
   const navigate = useNavigate();
+  const { t } = useLocale();
   const { currentUser } = useOutletContext<LayoutOutletContext>();
   const canEditOrg = currentUser?.role === "super" || currentUser?.role === "member";
   const [editMode, setEditMode] = useState(false);
@@ -55,24 +57,24 @@ function Members() {
   const DEFAULT_ORG_TREE: OrgGroup[] = [
     {
       id: "1",
-      name: "1교구",
+      name: t("members.orgDefault.parish1"),
       count: 0,
       expanded: true,
       children: [
-        { id: "1-1", name: "1-1 구역", active: true },
-        { id: "1-2", name: "1-2 구역", active: false },
-        { id: "1-3", name: "1-3 구역", active: false },
+        { id: "1-1", name: t("members.orgDefault.zone11"), active: true },
+        { id: "1-2", name: t("members.orgDefault.zone12"), active: false },
+        { id: "1-3", name: t("members.orgDefault.zone13"), active: false },
       ],
     },
-    { id: "2", name: "2교구", count: 0, expanded: false, children: [] },
-    { id: "3", name: "청년부", count: 0, expanded: false, children: [] },
-    { id: "4", name: "주일학교", count: 0, expanded: false, children: [] },
+    { id: "2", name: t("members.orgDefault.parish2"), count: 0, expanded: false, children: [] },
+    { id: "3", name: t("members.orgDefault.youth"), count: 0, expanded: false, children: [] },
+    { id: "4", name: t("members.orgDefault.sundaySchool"), count: 0, expanded: false, children: [] },
   ];
 
   // Initialize state from LocalStorage
   const [selectedZone, setSelectedZone] = useState(() => {
     const saved = localStorage.getItem(VIEW_STATE_KEY);
-    return saved ? JSON.parse(saved).zone : "1-1 구역";
+    return saved ? JSON.parse(saved).zone : t("members.defaultZone");
   });
   const [showAllMembers, setShowAllMembers] = useState(() => {
     const saved = localStorage.getItem(VIEW_STATE_KEY);
@@ -394,7 +396,7 @@ function Members() {
   // 선택된 성도 삭제 요청
   const handleDeleteMembers = () => {
     if (selectedIds.size === 0) {
-      alert("삭제할 성도를 선택해주세요.");
+      alert(t("members.alert.selectToDelete"));
       return;
     }
     setDeleteModal({
@@ -431,7 +433,7 @@ function Members() {
       setDeleteModal({ ...deleteModal, isOpen: false });
     } catch (error) {
       console.error("Failed to delete:", error);
-      alert("삭제 중 오류가 발생했습니다.");
+      alert(t("members.alert.deleteError"));
     }
   };
 
@@ -444,12 +446,12 @@ function Members() {
       >
         <div className="members-sidebar__header">
           <div>
-            <h2 className="members-sidebar__title">조직도</h2>
-            <p className="members-sidebar__subtitle">교회 조직 및 부서 관리</p>
+            <h2 className="members-sidebar__title">{t("members.sidebar.title")}</h2>
+            <p className="members-sidebar__subtitle">{t("members.sidebar.subtitle")}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {canEditOrg && (
-              <label className="edit-mode-switch" title="편집 모드">
+              <label className="edit-mode-switch" title={t("members.sidebar.editMode")}>
                 <input
                   type="checkbox"
                   checked={editMode}
@@ -462,7 +464,7 @@ function Members() {
             {editMode && (
               <button
                 className="members-sidebar__add-btn"
-                title="그룹 추가"
+                title={t("members.sidebar.addGroup")}
                 onClick={() => openModal("add_group")}
               >
                 <span className="material-symbols-outlined">add</span>
@@ -476,7 +478,7 @@ function Members() {
             <span className="material-symbols-outlined" style={{ marginRight: '0.5rem', color: 'var(--text-secondary)' }}>search</span>
             <input
               type="text"
-              placeholder="성도 이름 검색"
+              placeholder={t("members.sidebar.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: '0.9rem' }}
@@ -489,7 +491,7 @@ function Members() {
             style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center' }}
           >
             <span className="material-symbols-outlined" style={{ marginRight: '0.5rem' }}>groups</span>
-            전체 성도 보기
+            {t("members.sidebar.showAll")}
           </button>
         </div>
 
@@ -517,21 +519,21 @@ function Members() {
                     <div className="org-tree__actions" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: '2px' }}>
                       <button
                         onClick={() => openModal("add_zone", undefined, org.id)}
-                        title="구역 추가"
+                        title={t("members.sidebar.addZone")}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
                       >
                         <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>add_circle</span>
                       </button>
                       <button
                         onClick={() => openModal("edit_group", org.id, undefined, org.name)}
-                        title="그룹 수정"
+                        title={t("members.sidebar.editGroup")}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
                       >
                         <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>edit</span>
                       </button>
                       <button
                         onClick={() => handleDelete(org.id, false)}
-                        title="그룹 삭제"
+                        title={t("members.sidebar.deleteGroup")}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
                       >
                         <span className="material-symbols-outlined" style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>delete</span>
@@ -561,14 +563,14 @@ function Members() {
                           <div className="org-tree__actions" style={{ display: 'flex', gap: '2px' }}>
                             <button
                               onClick={(e) => { e.stopPropagation(); openModal("edit_zone", child.id, undefined, child.name); }}
-                              title="구역 수정"
+                              title={t("members.sidebar.editZone")}
                               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
                             >
                               <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#9ca3af' }}>edit</span>
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDelete(child.id, true, org.id); }}
-                              title="구역 삭제"
+                              title={t("members.sidebar.deleteZone")}
                               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}
                             >
                               <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#9ca3af' }}>close</span>
@@ -586,7 +588,7 @@ function Members() {
 
         <div className="members-sidebar__footer">
           <span className="material-symbols-outlined">info</span>
-          <span>전체 등록 성도: {members.length}명</span>
+          <span>{t("members.sidebar.totalRegistered", { n: members.length })}</span>
         </div>
 
         {/* Resize Handle */}
@@ -614,7 +616,7 @@ function Members() {
       <main className="members-content">
         <div className="members-content__inner">
           <div className="breadcrumb">
-            <a href="#">성도 관리</a>
+            <a href="#">{t("members.breadcrumb.root")}</a>
             <span className="material-symbols-outlined">chevron_right</span>
             <span className="breadcrumb__current">{selectedZone}</span>
           </div>
@@ -624,11 +626,11 @@ function Members() {
               <div>
                 <h2 className="content-header__title">
                   {showAllMembers
-                    ? `전체 성도 (${filteredMembers.length}명)`
-                    : `${selectedZone} (${filteredMembers.length}명)`}
+                    ? t("members.header.allTitle", { n: filteredMembers.length })
+                    : t("members.header.zoneTitle", { zone: selectedZone, n: filteredMembers.length })}
                 </h2>
                 <p className="content-header__subtitle">
-                  {showAllMembers ? "등록된 모든 성도 목록입니다." : "해당 구역의 성도 목록입니다."}
+                  {showAllMembers ? t("members.header.allSubtitle") : t("members.header.zoneSubtitle")}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -639,12 +641,12 @@ function Members() {
                     style={{ whiteSpace: 'nowrap' }}
                   >
                     <span className="material-symbols-outlined">delete</span>
-                    선택 삭제 ({selectedIds.size})
+                    {t("members.action.bulkDelete", { n: selectedIds.size })}
                   </button>
                 )}
                 <Link to="/members/new" className="btn btn--primary" style={{ whiteSpace: 'nowrap' }}>
                   <span className="material-symbols-outlined">add</span>
-                  성도 등록
+                  {t("members.action.register")}
                 </Link>
               </div>
             </div>
@@ -662,12 +664,12 @@ function Members() {
                           style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                         />
                       </th>
-                      <th style={{ width: '60px' }}>사진</th>
-                      <th>이름</th>
-                      <th>직분</th>
-                      <th>연락처</th>
-                      <th>소속</th>
-                      <th>상태</th>
+                      <th style={{ width: '60px' }}>{t("members.table.photo")}</th>
+                      <th>{t("members.table.name")}</th>
+                      <th>{t("members.table.role")}</th>
+                      <th>{t("members.table.phone")}</th>
+                      <th>{t("members.table.zone")}</th>
+                      <th>{t("members.table.status")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -721,9 +723,9 @@ function Members() {
                         <td onClick={() => navigate(`/members/edit/${member.id}`)}>{member.zone}</td>
                         <td onClick={() => navigate(`/members/edit/${member.id}`)}>
                           <span className={`status-badge status-badge--${member.status || 'registered'}`}>
-                            {member.status === 'moved' ? '이명' :
-                              member.status === 'visitor' ? '방문' :
-                                '등록'}
+                            {member.status === 'moved' ? t("members.status.moved") :
+                              member.status === 'visitor' ? t("members.status.visitor") :
+                                t("members.status.registered")}
                           </span>
                         </td>
                       </tr>
@@ -744,9 +746,9 @@ function Members() {
                   >
                     person_off
                   </span>
-                  <p>등록된 성도가 없습니다.</p>
+                  <p>{t("members.empty.title")}</p>
                   <p style={{ fontSize: "0.875rem", marginTop: "0.5rem" }}>
-                    "성도 등록" 버튼을 클릭하여 새 성도를 등록해주세요.
+                    {t("members.empty.hint")}
                   </p>
                 </div>
               )}
@@ -762,10 +764,10 @@ function Members() {
             <div className="modal" style={{ width: '400px' }}>
               <div className="modal__header">
                 <h3 className="modal__title">
-                  {modalState.type === "add_group" && "새 그룹 추가"}
-                  {modalState.type === "edit_group" && "그룹 이름 수정"}
-                  {modalState.type === "add_zone" && "새 구역 추가"}
-                  {modalState.type === "edit_zone" && "구역 이름 수정"}
+                  {modalState.type === "add_group" && t("members.modal.addGroup")}
+                  {modalState.type === "edit_group" && t("members.modal.editGroup")}
+                  {modalState.type === "add_zone" && t("members.modal.addZone")}
+                  {modalState.type === "edit_zone" && t("members.modal.editZone")}
                 </h3>
                 <button className="modal__close" onClick={closeModal}>
                   <span className="material-symbols-outlined">close</span>
@@ -773,13 +775,13 @@ function Members() {
               </div>
               <div className="modal__content">
                 <div className="form-group">
-                  <label className="form-label">이름</label>
+                  <label className="form-label">{t("members.modal.nameLabel")}</label>
                   <input
                     type="text"
                     className="form-input"
                     value={modalInput}
                     onChange={(e) => setModalInput(e.target.value)}
-                    placeholder="이름을 입력하세요"
+                    placeholder={t("members.modal.namePlaceholder")}
                     autoFocus
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleModalSubmit();
@@ -788,8 +790,8 @@ function Members() {
                 </div>
               </div>
               <div className="modal__footer">
-                <button className="btn btn--outline" onClick={closeModal}>취소</button>
-                <button className="btn btn--primary" onClick={handleModalSubmit}>저장</button>
+                <button className="btn btn--outline" onClick={closeModal}>{t("common.cancel")}</button>
+                <button className="btn btn--primary" onClick={handleModalSubmit}>{t("common.save")}</button>
               </div>
             </div>
           </div>
@@ -803,7 +805,7 @@ function Members() {
             <div className="modal__header">
               <h3 className="modal__title" style={{ color: 'var(--danger)' }}>
                 <span className="material-symbols-outlined" style={{ verticalAlign: 'bottom', marginRight: '8px' }}>warning</span>
-                삭제 확인
+                {t("members.deleteModal.title")}
               </h3>
               <button className="modal__close" onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}>
                 <span className="material-symbols-outlined">close</span>
@@ -812,38 +814,32 @@ function Members() {
             <div className="modal__content">
               {deleteModal.type === "member_bulk" && (
                 <>
-                  <p style={{ margin: '1rem 0', fontSize: '1rem', color: 'var(--text-primary)' }}>
-                    선택한 <strong>{deleteModal.count}명</strong>의 성도를 삭제하시겠습니까?
-                  </p>
+                  <p style={{ margin: '1rem 0', fontSize: '1rem', color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: t("members.deleteModal.bulkQuestion", { n: deleteModal.count || 0 }) }} />
                   <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    삭제된 데이터는 복구할 수 없습니다. 신중하게 결정해주세요.
+                    {t("members.deleteModal.bulkBody")}
                   </p>
                 </>
               )}
               {deleteModal.type === "group" && (
                 <>
-                  <p style={{ margin: '1rem 0', fontSize: '1rem', color: 'var(--text-primary)' }}>
-                    해당 <strong>교구(그룹)</strong>를 삭제하시겠습니까?
-                  </p>
+                  <p style={{ margin: '1rem 0', fontSize: '1rem', color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: t("members.deleteModal.groupQuestion") }} />
                   <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    소속된 구역과 성도의 분류 정보가 초기화될 수 있습니다.
+                    {t("members.deleteModal.groupBody")}
                   </p>
                 </>
               )}
               {deleteModal.type === "zone" && (
                 <>
-                  <p style={{ margin: '1rem 0', fontSize: '1rem', color: 'var(--text-primary)' }}>
-                    해당 <strong>구역</strong>을 삭제하시겠습니까?
-                  </p>
+                  <p style={{ margin: '1rem 0', fontSize: '1rem', color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: t("members.deleteModal.zoneQuestion") }} />
                   <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    소속된 성도의 구역 정보가 '미배정' 처리될 수 있습니다.
+                    {t("members.deleteModal.zoneBody")}
                   </p>
                 </>
               )}
             </div>
             <div className="modal__footer">
-              <button className="btn btn--outline" onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}>취소</button>
-              <button className="btn btn--danger" onClick={confirmDelete}>삭제하기</button>
+              <button className="btn btn--outline" onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}>{t("common.cancel")}</button>
+              <button className="btn btn--danger" onClick={confirmDelete}>{t("members.deleteModal.confirm")}</button>
             </div>
           </div>
         </div>

@@ -1,3 +1,5 @@
+import { useLocale } from "../../i18n/LocaleContext";
+
 interface TransactionSummaryProps {
   type: "income" | "expense";
   total: number;
@@ -6,6 +8,7 @@ interface TransactionSummaryProps {
 }
 
 function TransactionSummary({ type, total, count, formatCurrency }: TransactionSummaryProps) {
+  const { t } = useLocale();
   return (
     <div className={`transaction-summary ${type}`}>
       <div className="transaction-summary__icon">
@@ -14,11 +17,11 @@ function TransactionSummary({ type, total, count, formatCurrency }: TransactionS
         </span>
       </div>
       <div className="transaction-summary__info">
-        <span className="label">기간 내 총 {type === "income" ? "수입" : "지출"}</span>
+        <span className="label">{type === "income" ? t("finance.summary.incomePeriod") : t("finance.summary.expensePeriod")}</span>
         <span className="value">{formatCurrency(total)}</span>
       </div>
       <div className="transaction-summary__count">
-        <span>{count}건</span>
+        <span>{t("finance.summary.count", { n: count })}</span>
       </div>
     </div>
   );

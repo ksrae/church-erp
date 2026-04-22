@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useLocale } from "../../i18n/LocaleContext";
 
 export interface SelectMember {
   id: string;
@@ -24,12 +25,14 @@ export function MemberSelect({
   value,
   onChange,
   members,
-  placeholder = "성도를 검색하세요",
+  placeholder,
   includeAnonymous = false,
   roleFilter,
   disabled = false,
   className = "",
 }: MemberSelectProps) {
+  const { t } = useLocale();
+  const effectivePlaceholder = placeholder ?? t("common.search");
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -115,7 +118,7 @@ export function MemberSelect({
             setIsOpen(true);
           }}
           onFocus={() => setIsOpen(true)}
-          placeholder={placeholder}
+          placeholder={effectivePlaceholder}
           disabled={disabled}
           style={{
             width: '100%',
@@ -201,7 +204,7 @@ export function MemberSelect({
           {/* Anonymous Option */}
           {includeAnonymous && !searchTerm && (
             <div
-              onClick={() => handleSelect("익명")}
+              onClick={() => handleSelect(t("memberSelect.anonymous"))}
               style={{
                 padding: "0.75rem 1rem",
                 cursor: "pointer",
@@ -213,7 +216,7 @@ export function MemberSelect({
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f8fafc"}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "white"}
             >
-              익명
+              {t("memberSelect.anonymous")}
             </div>
           )}
 
@@ -282,7 +285,7 @@ export function MemberSelect({
             ))
           ) : (
             <div style={{ padding: '1rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem' }}>
-              {searchTerm ? "검색 결과가 없습니다" : "성도 목록이 없습니다"}
+              {searchTerm ? t("memberSelect.noResults") : t("memberSelect.empty")}
             </div>
           )}
         </div>

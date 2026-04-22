@@ -5907,6 +5907,17 @@
   border-bottom: none;
 }
 
+/* 빈 테이블 안내 행 — settings-table과 ledger-table 공용 */
+.settings-table td.table-empty,
+.ledger-table td.table-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  background: #fafbfc;
+}
+
 .settings-modal--lg {
   width: 480px;
   max-width: 90vw;

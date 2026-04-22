@@ -5,14 +5,16 @@ import { useAuth } from "../../App";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { getCurrentChurchId } from "../../utils/fileStorage";
+import { useLocale } from "../../i18n/LocaleContext";
 
 function ChurchDashboard() {
   const navigate = useNavigate();
+  const { t, locale } = useLocale();
   const { auth } = useAuth();
   const admin = auth.type === "church" ? auth.admin : null;
 
   const [stats, setStats] = useState({ members: 0, income: 0, expense: 0, worships: 0 });
-  const [churchName, setChurchName] = useState("교회");
+  const [churchName, setChurchName] = useState(t("churchDashboard.defaultChurchName"));
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -50,38 +52,42 @@ function ChurchDashboard() {
     setIsLoading(false);
   };
 
+  const localeTag = locale === "ko" ? "ko-KR" : "en-US";
   const formatCurrency = (n: number) => {
-    if (n === 0) return "₩0";
-    if (n >= 10000) return `₩${(n / 10000).toLocaleString("ko-KR")}만`;
-    return `₩${n.toLocaleString("ko-KR")}`;
+    if (n === 0) return locale === "ko" ? "₩0" : "$0";
+    if (locale === "ko") {
+      if (n >= 10000) return `₩${(n / 10000).toLocaleString(localeTag)}만`;
+      return `₩${n.toLocaleString(localeTag)}`;
+    }
+    return `$${n.toLocaleString(localeTag)}`;
   };
 
   const quickLinks = [
-    { path: "/admin/church/members/new", icon: "person_add", label: "성도 등록", color: "#3b82f6" },
-    { path: "/admin/church/worship", icon: "church", label: "예배 관리", color: "#10b981" },
-    { path: "/admin/church/announcements/new", icon: "campaign", label: "공지 작성", color: "#f59e0b" },
-    { path: "/admin/church/finance", icon: "account_balance_wallet", label: "재정 입력", color: "#8b5cf6" },
+    { path: "/admin/church/members/new", icon: "person_add", label: t("churchDashboard.quickLinks.registerMember"), color: "#3b82f6" },
+    { path: "/admin/church/worship", icon: "church", label: t("churchDashboard.quickLinks.worship"), color: "#10b981" },
+    { path: "/admin/church/announcements/new", icon: "campaign", label: t("churchDashboard.quickLinks.createAnnouncement"), color: "#f59e0b" },
+    { path: "/admin/church/finance", icon: "account_balance_wallet", label: t("churchDashboard.quickLinks.finance"), color: "#8b5cf6" },
   ];
 
   return (
     <div>
-      {/* 헤더 */}
+      {/* Header */}
       <div style={{ marginBottom: "1.5rem" }}>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#1e293b", margin: "0 0 0.375rem" }}>
-          {isLoading ? "로딩 중..." : `${churchName} 대시보드`}
+          {isLoading ? t("churchDashboard.loading") : t("churchDashboard.titleSuffix", { name: churchName })}
         </h1>
         <p style={{ color: "#64748b", margin: 0, fontSize: "0.9rem" }}>
-          {admin?.displayName}님, 환영합니다.
+          {t("churchDashboard.welcome", { name: admin?.displayName || "" })}
         </p>
       </div>
 
-      {/* KPI 카드 */}
+      {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
         {[
-          { label: "등록 성도", value: `${stats.members}명`, icon: "groups", color: "#3b82f6", path: "/admin/church/members" },
-          { label: "총 수입", value: formatCurrency(stats.income), icon: "payments", color: "#10b981", path: "/admin/church/finance" },
-          { label: "총 지출", value: formatCurrency(stats.expense), icon: "receipt_long", color: "#f59e0b", path: "/admin/church/finance" },
-          { label: "예배 기록", value: `${stats.worships}건`, icon: "church", color: "#8b5cf6", path: "/admin/church/worship" },
+          { label: t("churchDashboard.kpi.members"), value: t("churchDashboard.kpi.unit.people", { n: stats.members }), icon: "groups", color: "#3b82f6", path: "/admin/church/members" },
+          { label: t("churchDashboard.kpi.totalIncome"), value: formatCurrency(stats.income), icon: "payments", color: "#10b981", path: "/admin/church/finance" },
+          { label: t("churchDashboard.kpi.totalExpense"), value: formatCurrency(stats.expense), icon: "receipt_long", color: "#f59e0b", path: "/admin/church/finance" },
+          { label: t("churchDashboard.kpi.worshipRecords"), value: t("churchDashboard.kpi.unit.records", { n: stats.worships }), icon: "church", color: "#8b5cf6", path: "/admin/church/worship" },
         ].map((stat) => (
           <div
             key={stat.label}
@@ -100,9 +106,9 @@ function ChurchDashboard() {
         ))}
       </div>
 
-      {/* 빠른 실행 */}
+      {/* Quick Actions */}
       <div style={{ background: "white", borderRadius: "1rem", padding: "1.5rem", border: "1px solid var(--border-color)" }}>
-        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>빠른 실행</h2>
+        <h2 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "1rem" }}>{t("churchDashboard.quickLinks.title")}</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem" }}>
           {quickLinks.map((link) => (
             <button

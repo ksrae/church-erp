@@ -9,6 +9,7 @@ import {
   setupCurrencyListener,
   CurrencyCode,
 } from "../utils/currency";
+import { useLocale } from "../i18n/LocaleContext";
 
 // ... (Types imports remain same)
 import {
@@ -44,7 +45,7 @@ interface Member {
 
 // ... (Main Component starts)
 function Finance() {
-  // ... (State definitions remain same)
+  const { t, locale } = useLocale();
   const [financeData, setFinanceData] = useState<FinanceData>(initialFinanceData);
   const [members, setMembers] = useState<Member[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>("ledger");
@@ -181,18 +182,20 @@ function Finance() {
       updatedAccounts = financeData.accounts.map((a) =>
         a.id === account.id ? account : a
       );
-      action = `계정 수정: ${account.name}`;
+      action = t("finance.audit.accountEdit", { name: account.name });
       console.log("✏️ Editing existing account:", account.name);
     } else {
       updatedAccounts = [...financeData.accounts, { ...account, id: `acc-${Date.now()}` }];
-      action = `새 계정 추가: ${account.name}`;
+      action = t("finance.audit.accountAdd", { name: account.name });
       console.log("➕ Adding new account:", account.name);
     }
 
     saveFinanceData({ ...financeData, accounts: updatedAccounts });
 
-    // Log activity
-    await logActivity("FINANCE", action, `계정 이름: ${account.name}, 유형: ${account.type === 'income' ? '수입' : '지출'}`);
+    const typeLabel = account.type === 'income'
+      ? t("finance.audit.accountTypeIncome")
+      : t("finance.audit.accountTypeExpense");
+    await logActivity("FINANCE", action, t("finance.audit.accountBody", { name: account.name, type: typeLabel }));
 
     setShowAccountModal(false);
     setEditingAccount(null);
@@ -213,9 +216,12 @@ function Finance() {
       transactions: updatedTransactions,
     });
 
-    // Log activity
     if (accountToDelete) {
-      await logActivity("FINANCE", "계정 삭제", `삭제된 계정: ${accountToDelete.name}`);
+      await logActivity(
+        "FINANCE",
+        t("finance.audit.accountDelete"),
+        t("finance.audit.accountDeleteBody", { name: accountToDelete.name })
+      );
     }
 
     setShowDeleteConfirm(false);
@@ -238,7 +244,7 @@ function Finance() {
       updatedTransactions = financeData.transactions.map((t) =>
         t.id === transaction.id ? transaction : t
       );
-      action = "거래 내역 수정";
+      action = t("finance.audit.txnEdit");
       description = `${transaction.date} - ${transaction.description} (${accountName}): ${formatCurrencyUtil(transaction.amount, true)}`;
       console.log("✏️ Editing existing transaction:", transaction.id);
     } else {
@@ -247,7 +253,7 @@ function Finance() {
         id: `txn-${Date.now()}`
       };
       updatedTransactions = [...financeData.transactions, newTransaction];
-      action = "새 거래 추가";
+      action = t("finance.audit.txnAdd");
       description = `${transaction.date} - ${transaction.description} (${accountName}): ${formatCurrencyUtil(transaction.amount, true)}`;
       console.log("➕ Adding new transaction:", newTransaction.id);
     }
@@ -272,11 +278,10 @@ function Finance() {
 
     saveFinanceData({ ...financeData, transactions: updatedTransactions });
 
-    // Log activity
     if (transactionToDelete) {
       await logActivity(
         "FINANCE",
-        "거래 내역 삭제",
+        t("finance.audit.txnDelete"),
         `${transactionToDelete.date} - ${transactionToDelete.description}: ${formatCurrencyUtil(transactionToDelete.amount, true)}`
       );
     }
@@ -498,7 +503,7 @@ function Finance() {
 
   const formatDate = (dateStr: string): string => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString("ko-KR", {
+    return date.toLocaleDateString(locale === "ko" ? "ko-KR" : "en-US", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -628,7 +633,7 @@ function Finance() {
       <div className="finance-page loading">
         <div className="loading-spinner">
           <span className="material-symbols-outlined rotating">sync</span>
-          <p>데이터를 불러오는 중...</p>
+          <p>{t("finance.loading")}</p>
         </div>
       </div>
     );
@@ -670,7 +675,7 @@ function Finance() {
         <div className="settings-modal-overlay" onClick={() => setShowAccountModal(false)}>
           <div className="settings-modal settings-modal--lg" onClick={(e) => e.stopPropagation()}>
             <div className="settings-modal__header">
-              <h3 className="settings-modal__title">{editingAccount?.id ? "계정 수정" : "새 계정 추가"}</h3>
+              <h3 className="settings-modal__title">{editingAccount?.id ? t("finance.modal.accountEdit") : t("finance.modal.accountNew")}</h3>
               <button className="icon-btn" onClick={() => setShowAccountModal(false)}>
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -696,8 +701,8 @@ function Finance() {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>
-                {editingTransaction?.id ? "거래 수정" :
-                  editingTransaction?.type === "income" ? "수입 추가" : "지출 추가"}
+                {editingTransaction?.id ? t("finance.modal.transactionEdit") :
+                  editingTransaction?.type === "income" ? t("finance.modal.transactionIncomeNew") : t("finance.modal.transactionExpenseNew")}
               </h3>
               <button className="modal-close" onClick={() => setShowTransactionModal(false)}>
                 <span className="material-symbols-outlined">close</span>
@@ -733,8 +738,8 @@ function Finance() {
         }}
         message={
           deleteTarget?.type === "account"
-            ? "이 계정을 삭제하시겠습니까? 관련된 모든 거래 내역도 함께 삭제됩니다."
-            : "이 거래 내역을 삭제하시겠습니까?"
+            ? t("finance.deleteConfirm.account")
+            : t("finance.deleteConfirm.transaction")
         }
       />
     </div>

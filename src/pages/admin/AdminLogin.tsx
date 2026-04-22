@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { signInWithGoogle, LoginResult } from "../../utils/adminSecurity";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface AdminLoginProps {
   onLogin: (result: LoginResult) => void;
+  initialError?: string;
 }
 
-function AdminLogin({ onLogin }: AdminLoginProps) {
+function AdminLogin({ onLogin, initialError }: AdminLoginProps) {
+  const { t } = useLocale();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError || "");
 
   const handleGoogleLogin = async () => {
     setError("");
@@ -15,13 +18,13 @@ function AdminLogin({ onLogin }: AdminLoginProps) {
     try {
       const result = await signInWithGoogle();
       if (result.type === "denied") {
-        setError("접근이 거부되었습니다.");
+        setError(result.reason);
         return;
       }
       onLogin(result);
     } catch (err: any) {
       if (err.code === "auth/popup-closed-by-user") return;
-      setError("로그인 중 오류가 발생했습니다.");
+      setError(t("adminLogin.err.generic"));
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -34,7 +37,7 @@ function AdminLogin({ onLogin }: AdminLoginProps) {
         {/* 포탈로 돌아가기 */}
         <a href="/" style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#64748b", textDecoration: "none", fontSize: "0.875rem", marginBottom: "2rem" }}>
           <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>arrow_back</span>
-          포탈로 돌아가기
+          {t("adminLogin.back")}
         </a>
 
         <div style={{ background: "white", borderRadius: "1.5rem", padding: "2.5rem 2rem", boxShadow: "0 4px 24px rgba(0,0,0,0.08)", border: "1px solid #e2e8f0" }}>
@@ -42,8 +45,8 @@ function AdminLogin({ onLogin }: AdminLoginProps) {
             <div style={{ width: "3.5rem", height: "3.5rem", background: "linear-gradient(135deg, #16649c 0%, #0d4f7a 100%)", borderRadius: "1rem", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" }}>
               <span className="material-symbols-outlined" style={{ color: "white", fontSize: "1.75rem" }}>church</span>
             </div>
-            <h1 style={{ fontSize: "1.375rem", fontWeight: 700, color: "#1e293b", margin: "0 0 0.375rem" }}>관리자 로그인</h1>
-            <p style={{ fontSize: "0.875rem", color: "#64748b", margin: 0 }}>교회 관리자 또는 시스템 관리자</p>
+            <h1 style={{ fontSize: "1.375rem", fontWeight: 700, color: "#1e293b", margin: "0 0 0.375rem" }}>{t("adminLogin.title")}</h1>
+            <p style={{ fontSize: "0.875rem", color: "#64748b", margin: 0 }}>{t("adminLogin.subtitle")}</p>
           </div>
 
           {error && (
@@ -66,7 +69,7 @@ function AdminLogin({ onLogin }: AdminLoginProps) {
             {isLoading ? (
               <>
                 <span style={{ width: "20px", height: "20px", border: "2px solid #cbd5e1", borderTopColor: "#16649c", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
-                로그인 중...
+                {t("adminLogin.loggingIn")}
               </>
             ) : (
               <>
@@ -76,14 +79,13 @@ function AdminLogin({ onLogin }: AdminLoginProps) {
                   <path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.9 13.5-5l-6.2-5.2C29.5 35.5 26.9 36 24 36c-5.2 0-9.6-3-11.3-7.3l-6.5 5C9.4 39.4 16.2 44 24 44z"/>
                   <path fill="#1976D2" d="M43.6 20H24v8h11.3c-.9 2.4-2.5 4.4-4.6 5.8l6.2 5.2C41.2 35.4 44 30.1 44 24c0-1.3-.1-2.7-.4-4z"/>
                 </svg>
-                Google 계정으로 로그인
+                {t("adminLogin.google")}
               </>
             )}
           </button>
 
-          <p style={{ textAlign: "center", fontSize: "0.78rem", color: "#94a3b8", marginTop: "1.25rem", lineHeight: 1.6 }}>
-            교회 관리자는 라이선스 키가 필요합니다.<br />
-            라이선스 키가 없으면 담당자에게 문의하세요.
+          <p style={{ textAlign: "center", fontSize: "0.78rem", color: "#94a3b8", marginTop: "1.25rem", lineHeight: 1.6, whiteSpace: "pre-line" }}>
+            {t("adminLogin.help")}
           </p>
         </div>
       </div>

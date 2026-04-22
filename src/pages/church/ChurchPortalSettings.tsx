@@ -4,16 +4,17 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "fi
 import { db, storage } from "../../firebase";
 import { useAuth } from "../../App";
 import { Church } from "../../types/church";
+import { useLocale } from "../../i18n/LocaleContext";
 
 function ChurchPortalSettings() {
   const { auth } = useAuth();
+  const { t } = useLocale();
   const churchId = auth.type === "church" ? auth.admin.churchId : null;
 
   const [church, setChurch] = useState<Church | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const [tagline, setTagline] = useState("");
@@ -22,7 +23,6 @@ function ChurchPortalSettings() {
   const [showSchedule, setShowSchedule] = useState(true);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!churchId) return;
@@ -49,44 +49,6 @@ function ChurchPortalSettings() {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !churchId) return;
-    if (!file.type.startsWith("image/")) { flash("error", "이미지 파일만 업로드할 수 있습니다."); return; }
-    if (file.size > 5 * 1024 * 1024) { flash("error", "이미지는 5MB 이하여야 합니다."); return; }
-
-    setUploadingLogo(true);
-    try {
-      const ext = file.name.split(".").pop() || "png";
-      const path = `churches/${churchId}/logo_${Date.now()}.${ext}`;
-      const r = storageRef(storage, path);
-      await uploadBytes(r, file);
-      const url = await getDownloadURL(r);
-      await updateDoc(doc(db, "churches", churchId), { logo: url });
-      setChurch((prev) => (prev ? { ...prev, logo: url } : prev));
-      flash("success", "로고가 업데이트되었습니다.");
-    } catch (err) {
-      console.error(err);
-      flash("error", "로고 업로드 중 오류가 발생했습니다.");
-    }
-    setUploadingLogo(false);
-    if (logoInputRef.current) logoInputRef.current.value = "";
-  };
-
-  const handleLogoRemove = async () => {
-    if (!churchId || !church?.logo) return;
-    if (!confirm("로고를 삭제하시겠습니까?")) return;
-    try {
-      await updateDoc(doc(db, "churches", churchId), { logo: "" });
-      try { await deleteObject(storageRef(storage, church.logo)); } catch { /* ignore storage errors */ }
-      setChurch((prev) => (prev ? { ...prev, logo: "" } : prev));
-      flash("success", "로고가 삭제되었습니다.");
-    } catch (e) {
-      console.error(e);
-      flash("error", "삭제 중 오류가 발생했습니다.");
-    }
-  };
-
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0 || !churchId) return;
@@ -96,7 +58,7 @@ function ChurchPortalSettings() {
       const uploaded: string[] = [];
       for (const file of Array.from(files)) {
         if (!file.type.startsWith("image/")) continue;
-        if (file.size > 10 * 1024 * 1024) { flash("error", `${file.name}은 10MB를 초과합니다.`); continue; }
+        if (file.size > 10 * 1024 * 1024) { flash("error", t("portalSettings.photoTooLarge", { name: file.name })); continue; }
         const ext = file.name.split(".").pop() || "jpg";
         const path = `churches/${churchId}/photos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
         const r = storageRef(storage, path);
@@ -107,11 +69,11 @@ function ChurchPortalSettings() {
         const nextPhotos = [...(church?.photos || []), ...uploaded];
         await updateDoc(doc(db, "churches", churchId), { photos: nextPhotos });
         setChurch((prev) => (prev ? { ...prev, photos: nextPhotos } : prev));
-        flash("success", `${uploaded.length}장의 사진이 업로드되었습니다.`);
+        flash("success", t("portalSettings.photoUploaded", { n: uploaded.length }));
       }
     } catch (err) {
       console.error(err);
-      flash("error", "사진 업로드 중 오류가 발생했습니다.");
+      flash("error", t("portalSettings.photoUploadFailed"));
     }
     setUploadingPhoto(false);
     if (photoInputRef.current) photoInputRef.current.value = "";
@@ -119,16 +81,16 @@ function ChurchPortalSettings() {
 
   const handlePhotoRemove = async (url: string) => {
     if (!churchId || !church) return;
-    if (!confirm("이 사진을 삭제하시겠습니까?")) return;
+    if (!confirm(t("portalSettings.photoDeleteConfirm"))) return;
     try {
       const nextPhotos = (church.photos || []).filter((p) => p !== url);
       await updateDoc(doc(db, "churches", churchId), { photos: nextPhotos });
       try { await deleteObject(storageRef(storage, url)); } catch { /* ignore */ }
       setChurch((prev) => (prev ? { ...prev, photos: nextPhotos } : prev));
-      flash("success", "사진이 삭제되었습니다.");
+      flash("success", t("portalSettings.photoDeleted"));
     } catch (e) {
       console.error(e);
-      flash("error", "삭제 중 오류가 발생했습니다.");
+      flash("error", t("portalSettings.photoDeleteFailed"));
     }
   };
 
@@ -143,10 +105,10 @@ function ChurchPortalSettings() {
         showSchedule,
       });
       setChurch((prev) => (prev ? { ...prev, tagline, description, showAnnouncements, showSchedule } : prev));
-      flash("success", "포탈 설정이 저장되었습니다.");
+      flash("success", t("portalSettings.saveSuccess"));
     } catch (e) {
       console.error(e);
-      flash("error", "저장 중 오류가 발생했습니다.");
+      flash("error", t("portalSettings.saveFailed"));
     }
     setIsSaving(false);
   };
@@ -155,22 +117,22 @@ function ChurchPortalSettings() {
     return (
       <div style={{ textAlign: "center", padding: "4rem", color: "#94a3b8" }}>
         <span className="material-symbols-outlined" style={{ fontSize: "2.5rem", animation: "spin 1s linear infinite" }}>autorenew</span>
-        <p>불러오는 중...</p>
+        <p>{t("portalSettings.loading")}</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   if (!church) {
-    return <div style={{ padding: "2rem", color: "#ef4444" }}>교회 정보를 불러올 수 없습니다.</div>;
+    return <div style={{ padding: "2rem", color: "#ef4444" }}>{t("portalSettings.notFound")}</div>;
   }
 
   return (
     <div style={{ maxWidth: "960px", margin: "0 auto" }}>
       <div style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#1e293b", margin: "0 0 0.375rem" }}>교회 포탈 페이지</h1>
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#1e293b", margin: "0 0 0.375rem" }}>{t("portalSettings.title")}</h1>
         <p style={{ color: "#64748b", margin: 0, fontSize: "0.9rem" }}>
-          성도 포탈에 노출되는 교회 브랜딩과 공개 범위를 설정합니다.
+          {t("portalSettings.description")}
         </p>
       </div>
 
@@ -186,46 +148,16 @@ function ChurchPortalSettings() {
         </div>
       )}
 
-      {/* 로고 */}
-      <section style={sectionStyle}>
-        <h2 style={h2Style}>교회 로고</h2>
-        <p style={hintStyle}>포탈 상단 로고와 교회 카드에 표시됩니다. (정사각형 권장, 5MB 이하)</p>
-        <div style={{ display: "flex", gap: "1.25rem", alignItems: "center", marginTop: "1rem" }}>
-          <div style={{
-            width: "96px", height: "96px", borderRadius: "16px", overflow: "hidden",
-            background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center",
-            border: "1px solid #e2e8f0",
-          }}>
-            {church.logo ? (
-              <img src={church.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : (
-              <span className="material-symbols-outlined" style={{ color: "#16649c", fontSize: "2.5rem" }}>church</span>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <label style={primaryBtnStyle}>
-              <span className="material-symbols-outlined" style={{ fontSize: "1.1rem" }}>upload</span>
-              {uploadingLogo ? "업로드 중..." : church.logo ? "로고 교체" : "로고 업로드"}
-              <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} disabled={uploadingLogo} style={{ display: "none" }} />
-            </label>
-            {church.logo && (
-              <button onClick={handleLogoRemove} style={dangerBtnStyle}>
-                <span className="material-symbols-outlined" style={{ fontSize: "1.1rem" }}>delete</span>
-                삭제
-              </button>
-            )}
-          </div>
-        </div>
-      </section>
-
       {/* 사진 */}
       <section style={sectionStyle}>
-        <h2 style={h2Style}>교회 소개 사진</h2>
-        <p style={hintStyle}>포탈 hero 영역에 노출됩니다. 여러 장을 업로드하면 자동 슬라이드됩니다. (각 10MB 이하)</p>
+        <h2 style={h2Style}>{t("portalSettings.photosTitle")}</h2>
+        <p style={hintStyle}>
+          {t("portalSettings.photosHint")}
+        </p>
         <div style={{ marginTop: "1rem" }}>
           <label style={primaryBtnStyle}>
             <span className="material-symbols-outlined" style={{ fontSize: "1.1rem" }}>add_photo_alternate</span>
-            {uploadingPhoto ? "업로드 중..." : "사진 추가"}
+            {uploadingPhoto ? t("portalSettings.uploading") : t("portalSettings.addPhoto")}
             <input ref={photoInputRef} type="file" accept="image/*" multiple onChange={handlePhotoUpload} disabled={uploadingPhoto} style={{ display: "none" }} />
           </label>
         </div>
@@ -243,7 +175,7 @@ function ChurchPortalSettings() {
                     background: "rgba(0,0,0,0.6)", color: "white", border: "none",
                     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                   }}
-                  title="삭제"
+                  title={t("portalSettings.photoDelete")}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>close</span>
                 </button>
@@ -251,49 +183,49 @@ function ChurchPortalSettings() {
             ))}
           </div>
         ) : (
-          <p style={{ ...hintStyle, marginTop: "1rem" }}>아직 등록된 사진이 없습니다.</p>
+          <p style={{ ...hintStyle, marginTop: "1rem" }}>{t("portalSettings.noPhotos")}</p>
         )}
       </section>
 
       {/* 설명 */}
       <section style={sectionStyle}>
-        <h2 style={h2Style}>교회 소개</h2>
+        <h2 style={h2Style}>{t("portalSettings.aboutTitle")}</h2>
 
-        <label style={labelStyle}>한 줄 소개</label>
+        <label style={labelStyle}>{t("portalSettings.taglineLabel")}</label>
         <input
           type="text"
           value={tagline}
           onChange={(e) => setTagline(e.target.value)}
-          placeholder="예: 복음의 빛을 밝히는 공동체"
+          placeholder={t("portalSettings.taglinePlaceholder")}
           maxLength={80}
           style={inputStyle}
         />
 
-        <label style={{ ...labelStyle, marginTop: "1rem" }}>상세 소개</label>
+        <label style={{ ...labelStyle, marginTop: "1rem" }}>{t("portalSettings.descLabel")}</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={5}
-          placeholder="교회 소개 문구를 입력해주세요."
+          placeholder={t("portalSettings.descPlaceholder")}
           style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
         />
       </section>
 
       {/* 공개 설정 */}
       <section style={sectionStyle}>
-        <h2 style={h2Style}>공개 설정</h2>
-        <p style={hintStyle}>성도 포탈에서 각 섹션을 표시할지 여부를 선택합니다.</p>
+        <h2 style={h2Style}>{t("portalSettings.visibilityTitle")}</h2>
+        <p style={hintStyle}>{t("portalSettings.visibilityHint")}</p>
 
         <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <ToggleRow
-            label="공지사항 공개"
-            hint="게시된 공지사항을 포탈에서 볼 수 있습니다."
+            label={t("portalSettings.announcementsLabel")}
+            hint={t("portalSettings.announcementsHint")}
             checked={showAnnouncements}
             onChange={setShowAnnouncements}
           />
           <ToggleRow
-            label="일정 공개"
-            hint="공개된 예배 및 행사 일정을 포탈에서 볼 수 있습니다."
+            label={t("portalSettings.scheduleLabel")}
+            hint={t("portalSettings.scheduleHint")}
             checked={showSchedule}
             onChange={setShowSchedule}
           />
@@ -303,7 +235,7 @@ function ChurchPortalSettings() {
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1.5rem" }}>
         <button onClick={handleSaveMeta} disabled={isSaving} style={{ ...primaryBtnStyle, padding: "0.75rem 1.5rem", fontSize: "0.95rem" }}>
           <span className="material-symbols-outlined" style={{ fontSize: "1.1rem" }}>save</span>
-          {isSaving ? "저장 중..." : "설정 저장"}
+          {isSaving ? t("portalSettings.saving") : t("portalSettings.saveBtn")}
         </button>
       </div>
     </div>
@@ -348,10 +280,4 @@ const primaryBtnStyle: React.CSSProperties = {
   padding: "0.625rem 1rem", background: "#16649c", color: "white",
   border: "none", borderRadius: "10px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem",
 };
-const dangerBtnStyle: React.CSSProperties = {
-  display: "inline-flex", alignItems: "center", gap: "0.375rem",
-  padding: "0.625rem 1rem", background: "white", color: "#dc2626",
-  border: "1px solid #fecaca", borderRadius: "10px", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem",
-};
-
 export default ChurchPortalSettings;
